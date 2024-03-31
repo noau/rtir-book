@@ -44,6 +44,8 @@ Basic probability knowledge for PDF, CDF and probability distribution is enough.
 
 If you haven't learned about `Rust` , please refer to the official [The Rust Programming Language](https://doc.rust-lang.org/book/). There're also wonderful community resources help you learn `Rust`. If you prefer an interactive tutorials, I'll recommend [Rustlings](https://github.com/rust-lang/rustlings).
 
+I choose `Rust` mainly for `Cargo` and its good community, there're no other special considerations. If you've learned other imperative languages like `C`, `C++` or `Go`, possibly you can start reading this book and refer to the Rust book when needed.
+
 ::: callout-tip
 ## Programming Language
 
@@ -58,7 +60,7 @@ My target reader when writing this tutorials are those college students who just
 
 There'll be three parts in this tutorial. in the first part we'll build a rather simple ray tracer similar to the one you would build following Shirley's books, with some improvements and modifications that are related to `Rust`. After this part you'll have a simple ray tracer that could render a classical Cornel Box scene. We'll introduce some more geometry primitives, use multi-thread to speed up rendering, and design a (possibly) better architecture than in Shirley's books, but the core idea is same.
 
-In the second and third part, we'll improve the renderer, adding more features to it. Some of the contents included are mentioned in Shirley's books as \*Next Steps\*, but there're more that he haven't mentioned. The second part will improve the renderer in multiple directions. You'll get a reduced version of a PBRT-like renderer after this part, without too many contents in each part like way too many BxDFs, various integrators, etc. We'll still keep it simple, but leave a clean architecture that you can not only fully understand, implements but also improve.
+In the second and third part, we'll improve the renderer, adding more features to it. Some of the contents included are mentioned in Shirley's books as *Next Steps*, but there're more that he haven't mentioned. The second part will improve the renderer in multiple directions. You'll get a reduced version of a PBRT-like renderer after this part, without too many contents in each part like way too many BxDFs, various integrators, etc. We'll still keep it simple, but leave a clean architecture that you can not only fully understand, implements but also improve.
 
 And finally in the third part, we'll add all those previously omitted complexities for varieties. We'll also add some features that even PBRT v4 haven't mentioned. The third might be organized like PBRT, where we'll have a chapter for one topic, some subtopic, where we'll introduce some small thing, and build a special scene for it. the order of most chapters in part 3 is unimportant, and you can skip some one and just head to those you're interested in.
 
@@ -77,3 +79,5 @@ Except for some special chapters like preface, references and appendices, most c
 -   Questions, Challenges and Further Possibilities: Like the exercise part of a text book, I'll list some questions here(if there're) so you can make sure you did understand the content presented in this chapter. There's might also be some programming challenges that you might modify your code or write some other pieces of code to achieve. Further reading materials and improvement possibilities will also be listed here, and note that things listed here will either not be implemented in this tutorial, or I'll just leave a link to the chapter if it's included. Future versions of this tutorial might move some exercises to later dedicated chapters, so if you're reading the WIP document, please use VCS like `git` to avoid conflicts with subsequent content.
 
 This preface was written before the whole book content was written. I use it as my guidance to write this book and I hope you can understand it if you're reading the **WIP** version.
+
+Please forgive me if I tend to be a bit verbose, but I strive to ensure that every sentence and/or paragraph is clear and easily understandable.
