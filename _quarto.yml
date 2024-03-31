@@ -1,0 +1,57 @@
+project:
+  type: book
+
+execute: 
+  freeze: auto
+
+book:
+  title: "Ray-Tracing in Rust"
+  author:
+    - name: "Dexter Chen"
+      email: "dexterccc@126.com"
+  date: today
+  description: "Build a PBRT-like renderer in Rust."
+  # url: https://example.com
+  # repo-url: https://github.com/juba/bookup-html/tree/main/examples/book
+  # repo-actions: issue
+  license: "CC BY-NC-ND"
+  search: true
+  reader-mode: true
+  sidebar:
+    style: "docked"
+  chapters:
+    - index.qmd
+  appendices:
+    - references.qmd
+  page-footer:
+    center: 
+      - text: "© 2024 Dexter Chen. All Rights Reserved."
+
+filters:
+  - social-share
+  - collapse-callout
+
+share:
+  location: "before-body"
+  permalink: "https://github.com/"
+  description: "Build a PBRT-like renderer in Rust."
+  twitter: true
+  facebook: true
+  reddit: true
+  stumble: true
+  tumblr: true
+  linkedin: true
+  email: true
+  mastodon: true
+
+collapse-callout:
+  all: false
+callout-appearance: simple
+callout-icon: true
+
+bibliography: references.bib
+
+format:
+  bookup-html:
+        toc: true
+        toc-depth: 3

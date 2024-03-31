@@ -1,0 +1,79 @@
+---
+license: "CC BY-NC-ND"
+---
+
+# Preface {.unnumbered}
+
+::: callout-important
+## WIP
+
+This tutorial is still **working in progress** and the code examples are not guaranteed to be correct currently!
+:::
+
+This is a book inspired by [Peter Shirley's Ray Tracing In One Weekend Series](https://raytracing.github.io/).
+
+In this book we'll build a Ray Tracer using the `Rust` programming languages from scratch, starting from a basic brute force ray tracer, going through several techniques that make our little ray tracer more performant or more plausible.
+
+## Why yet another Ray Tracing tutorial?
+
+There're lots of fascinating ray tracing tutorials, and even several tutorials already written using `Rust`, but most of them focus on the basics of ray tracing. However there's still a large gap between those and the bible book of ray tracing/physically based rendering -- [PBRT](https://pbrt.org).
+
+When I partly finished Peter Shirley's Ray Tracing In One Weekend Series, I've already been fascinated by this wonderful area. However, when I tried to learn further as a junior college student, I quickly found that books in this area is not so friendly to us. PBRT is organized more like a manual rather than a textbook that guide you through the development of a physically based renderer. You learned a lot theories and put them into practice with the provided code. But what if you want to understand all pieces of code fully?
+
+Well. This is not a good learning style, but I like it. And I believe that there're some other people who love this style too. So I started writing this book and hope that any one, especially college students, who have troubles building a renderer that trying to implement the whole PBRT would enjoy this book.
+
+## Preliminaries
+
+One technical book cannot cover all the details and preliminaries, let alone this little one, so there're some preliminaries that I hope my readers would have exceeded, and don't worry, I'll try my best to minimize these preliminaries. And I'll list some useful resources if you haven't learned some topics or need a review.
+
+Oh! And you don't really need to handle all the preliminaries before reading and handing on this tutorial, you can just learn when you really need it, except for some basic `Rust` knowledge that I don't want to repeat for they're usually verbose to state and have already detailed explanation in the Rust community.
+
+### Linear Algebra
+
+Computer Graphics uses a lot of linear algebra for simplicity and precision. We do a lot of vector and matrix calculations in this tutorial so make sure you know the very basics of linear algebra. Course by [3Blue1Brown](https://www.3blue1brown.com/topics/linear-algebra) is a good place if you need some review or haven't taken this course yet. This course emphasizes the geometry intuition of linear algebra which can benefit you a lot dealing with computer graphics, so **highly recommended**.
+
+### Calculus I & II
+
+Most college students will learn these course in their first year. We won't be using too much advanced calculus knowledge, but it's still needed, especially in Monte Carlo methods. Again, I recommend the course by [3Blue1Brown](https://www.3blue1brown.com/topics/calculus).
+
+### Probability Theory
+
+Basic probability knowledge for PDF, CDF and probability distribution is enough. Some schools don't teach Monte Carlo theory in elementary probability course. That's fine. I'll introduce it in the book where we need it. It's a core component of PBR so we'll spend more time to discuss and explain it.
+
+### Rust
+
+If you haven't learned about `Rust` , please refer to the official [The Rust Programming Language](https://doc.rust-lang.org/book/). There're also wonderful community resources help you learn `Rust`. If you prefer an interactive tutorials, I'll recommend [Rustlings](https://github.com/rust-lang/rustlings).
+
+::: callout-tip
+## Programming Language
+
+Actually the programming language used to implement this tutorial isn't important, The `Rust` is listed here for I'm showing my `Rust` implementation codes in the implementation part, and most of my architecture design is based on `Rust`'s features, especially something like `enum`, `trait`, etc. And I'll use many 3-rd party crates to support the development. So if you choose other language, please be careful to make specific changes suitable for your choice.
+:::
+
+## How to go through this tutorial?
+
+My target reader when writing this tutorials are those college students who just finished the courses containing first 3 parts of the preliminaries, and I recommend students to see this as a vacation project that could be completed immediately after the semester when they finished the 3 courses. However since this is a starter material, I believe anyone who is interested in ray tracing could read this tutorial easily.
+
+### Parts
+
+There'll be three parts in this tutorial. in the first part we'll build a rather simple ray tracer similar to the one you would build following Shirley's books, with some improvements and modifications that are related to `Rust`. After this part you'll have a simple ray tracer that could render a classical Cornel Box scene. We'll introduce some more geometry primitives, use multi-thread to speed up rendering, and design a (possibly) better architecture than in Shirley's books, but the core idea is same.
+
+In the second and third part, we'll improve the renderer, adding more features to it. Some of the contents included are mentioned in Shirley's books as \*Next Steps\*, but there're more that he haven't mentioned. The second part will improve the renderer in multiple directions. You'll get a reduced version of a PBRT-like renderer after this part, without too many contents in each part like way too many BxDFs, various integrators, etc. We'll still keep it simple, but leave a clean architecture that you can not only fully understand, implements but also improve.
+
+And finally in the third part, we'll add all those previously omitted complexities for varieties. We'll also add some features that even PBRT v4 haven't mentioned. The third might be organized like PBRT, where we'll have a chapter for one topic, some subtopic, where we'll introduce some small thing, and build a special scene for it. the order of most chapters in part 3 is unimportant, and you can skip some one and just head to those you're interested in.
+
+### Chapters
+
+Except for some special chapters like preface, references and appendices, most chapters in this tutorial are organized in a structured way. Here's I'll explain every section:
+
+-   Introduction: this is the start section of most chapters. In this section, I'll provide a brief overview of this chapter, and if possible, I'll also show you what you'll get after finishing this chapter.
+
+-   Theory: In this section, I'll explain the theory used in this chapter, explaining new concepts and terminologies, deriving all formulas used in this chapter, and design a scene for this chapter, if necessary. In some chapters, especially for chapters at in part 3, at the start of this section, I'll list some references and the readers are expected to read those materials before continuing. For those chapters, aside from scene design, I will also add some necessary supplementary materials and explanations to the referenced materials if needed.
+
+-   Implementation Design: This section will explain the design of chapter's main topic in pseudo-code or graphs. I won't show you the real code I've written to implement the feature here. I'll also mention some implementation tricks and skills here, especially the usage of `Rust` functionality and 3-rd party crates. The readers are encouraged to stop here, and turn to your own code, and implement in your own code.
+
+-   Rust Implementation: This section will explain some `Rust` codes I have written for implementation. However please note that I'm note listing every line of codes here. Only necessary explanations are placed here, and I think those codes I have chosen is enough that you can complete based on them. Some extra explanations will be placed in the code as the form of comments, you can check it in my GitHub repo if needed.
+
+-   Questions, Challenges and Further Possibilities: Like the exercise part of a text book, I'll list some questions here(if there're) so you can make sure you did understand the content presented in this chapter. There's might also be some programming challenges that you might modify your code or write some other pieces of code to achieve. Further reading materials and improvement possibilities will also be listed here, and note that things listed here will either not be implemented in this tutorial, or I'll just leave a link to the chapter if it's included. Future versions of this tutorial might move some exercises to later dedicated chapters, so if you're reading the WIP document, please use VCS like `git` to avoid conflicts with subsequent content.
+
+This preface was written before the whole book content was written. I use it as my guidance to write this book and I hope you can understand it if you're reading the **WIP** version.
