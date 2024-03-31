@@ -11,9 +11,9 @@ book:
       email: "dexterccc@126.com"
   date: today
   description: "Build a PBRT-like renderer in Rust."
-  # url: https://example.com
-  # repo-url: https://github.com/juba/bookup-html/tree/main/examples/book
-  # repo-actions: issue
+  url: https://noau.github.io/rtir-book
+  repo-url: https://github.com/noau/rtir-book
+  repo-actions: issue
   license: "CC BY-NC-ND"
   search: true
   reader-mode: true
@@ -33,7 +33,7 @@ filters:
 
 share:
   location: "before-body"
-  permalink: "https://github.com/"
+  permalink: "https://noau.github.io/rtir-book"
   description: "Build a PBRT-like renderer in Rust."
   twitter: true
   facebook: true
