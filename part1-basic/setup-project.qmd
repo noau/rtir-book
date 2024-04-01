@@ -56,8 +56,12 @@ This is what the `cargo new` command generate automatically for us. Now run `car
 Hello, world!
 ```
 
-Congratulations! You can now skip to next chapter and start writing your ray-tracer!
+## 3-rd Party Dependencies {#sec-dependencies}
 
-## 3-rd Party Dependencies
+### Linear Algebra: `glam` 
+
+### Image Handling: `image`
+
+### Color Management: `Palatte`
 
 ## Questions, Challenges & Future Possibilities {#sec-p1c1-qcfp}

@@ -1,0 +1,134 @@
+# Geometry & Colors
+
+Generally and loosely speaking, a renderer is just a function that takes a scene as input, and gives a corresponding image as its output. In this chapter, we'll settle the part of final output for our ray tracer.
+
+## Linear Algebra
+
+## Image and Pixel Format
+
+Currently in our renderer, an image is a 2D array, with each location representing a color. But a real image contains more than that, with a lot more considerations about like image compression to save storage space. But we won't deal with that complexity and just delegate it to some other dependencies.
+
+But what we do need to consider is how the color at each place of the image will be represented.
+
+### 8-bit RGB Pixel
+
+::: callout-note
+## How the display works
+
+I might explain how the display works today, or give a link to other blog post/video(**preferred**), but not now. If you have some recommendations, let me know using a discuss or issue in the repo. Thank you!
+:::
+
+So as most displays will display a color with the three primary color, our output image will use such a format. But there's more to say about each primary color. How could be represent the lightness of each primary color?
+
+Well, there're two main ways. There will always be a upper limit of lightness a display can display, so if we use 0 standing for total black(no light), and 1 for the lightest lightness, any value fall into $[0, 1]$ will be a valid lightness. However, that's not we'll use.
+
+The range $[0, 1]$ is continuous, but we know that discrete numbers are more friendly to computers. We discrete the range by split it into a lot of non-overlapping blocks, and use one unique value for one block. The most widely used way to split this range is to divide it evenly, and the more blocks we divide it into, the more smooth the color level will be. Also to make better use of computer's architecture, we usually choose a power of 2 as the number of blocks. The most widely used one is $2^8$, and this format is usually referred as `8-bit` color depth.
+
+There're actually other number available. High end displays today usually announcing that they can handle `10-bit` color depth. And it's not impossible to output the continuous color range, however, such complexity will be considered later in Part 3, where will introduce more about this, adding different outputs to our renderer.
+
+### Image Format: Jpeg V.S. Png
+
+Since we'll delegate the complexity of image format to 3-rd parties, we could just use the format they provide without too much considerations. However, the choice is still important since some format will do extra operations to your image data.
+
+As mentions earlier, some image format will use compression techniques to reduce storage space used by the image, and unfortunately, one of the most popular image format, `jpeg`, will just do this. For our usage, this is unfortunately catastrophic. When you check on pixel from the `jpeg` image, the color is usually not exactly what your renderer have output, so we need other formats that won't do this and showing you just what your renderer calculated. My choice is `png`, and I recommend it to you also since it can handle the `alpha` channel not discussed above, which will be discussed in Part 2 where we'll introduce Environment Map.
+
+### Pixel Format For rendering
+
+However, different from output format, the discrete way is not suitable for rendering process. During rendering we'll do a bunch of math operations to the pixels including multiplying by another pixel or constant value. We also use this color to represent the color of light, which usually exceeds of the highest lightness(in fact, much higher).
+
+So we use values from $[0, 1]$ range to represent the primary color during rendering, and transform it to the format of the output image.
+
+## Implementation Choice
+
+### Output Image
+
+::: callout-tip
+## Skip
+
+If you're not using `Rust`, or you're using image crates other than `image` talked in @sec-dependencies, you can just skip this section.
+
+There's also no real design here. I'm just introducing some structs and functionality from `image` crate, so if you have experience with it, you can also skip.
+:::
+
+Four pixel formats are provided by `image` crate:
+
+-   `RGB`: three primary colors, red, green, and blue.
+
+-   `RGBA`: `RGB` plus an extra alpha channel.
+
+-   `Luma`: pixel that represents only gray-scale(lightness). You can achieve similar effect by using same value for the three primary color in `RGB`.
+
+-   `LumaA`: again, `Luma` with an extra alpha channel.
+
+Those four pixel types are parameterized by a type specifying the format of each component, and the available choice includes: `f32`, `f64`, `i8 - i64`, `u8 - u64`, `isize`, `usize`.
+
+For our usage, i.e., 8-bit color depth, we will choose `RGB<u8>`.
+
+### Color For Rendering
+
+We could use `RGB<f32>` as before for our rendering pixel. But I'll another color library like `palette` which provides more functionalities, like color space management, that are useful for us. However, I'll first list some guideline of color struct here in case you want to implement your own one.
+
+First you need a way to represent the three components of rgb color together, you can use a `struct Color` with three member of type `f32`. Then you need to provide some useful 'constructors' for it, including `new(r, g, b)`, `new_mono(g)`. Then implementing some necessary and useful builtin traits, including `Debug`, `Clone`, `Copy`, etc. And there should also be a `From<Vec3>` and `Into<Vec3>` implementation that we can do more operation through `Vec3`.
+
+Then there're lots of works to do for math operators. Implement `Add`, `Sub`, `Mul`, `Div` for `Color`, `Vec3` and `f32`. There're ways to reduce those similar and verbose codes, see [Exercise @sec-p1c2-emacroimpl].
+
+Also, we need a `clamp` method that clamp each component into the $[0, 1]$ range so it won't overflow/down-flow when converting it to the output format.
+
+::: callout-tip
+## Vec3 for Color
+
+There's actually a trick for implementing such a `Color` struct, that you can implement it as a wrapper on your vector: `struct Color(Vec3)`, which can make your life easier if you decide to use your own color.
+:::
+
+Those methods above are common operation, but we need more. First we have to add a way that can transform this color to the output format.
+
+The `palette` crate provides many different color structs with auxiliary for color space management and other operations. What we will use here is a bit strange if you haven't learned about color operation, called `LinSrgb<f32>`. Here the `S` means probably standard, and by default this color in sRGB standard color space. The `Lin` means `Linear`, which allows us to do mathematical operations just as what you expect normally.
+
+::: callout-important
+## Explain Linear Color
+
+It's important and necessary to explain linear color and color operations here. This will be done after first draft was done.
+:::
+
+## Implementation
+
+The only needed implementation if you're following me is the conversion from rendering color to output color. Fortunately that this logic has already been implemented in the `palette` crate, called `to_format`. We can use this method to convert our rendering color to the `LinSrgb<u8>` from `palette` crate, and then construct a new `Rgb<u8>` using exactly the same value. Here's my code:
+
+``` rust
+use image::Rgb;
+
+pub trait ToOutputColor {                        // <1>
+    fn to_output_color(&self) -> Rgb<u8>;        // <1>
+}                                                // <1>
+
+impl ToOutputColor for palette::LinSrgb<f32> {
+    fn to_output_color(&self) -> Rgb<u8> {
+        let color_u8 = self.into_format();
+        Rgb::from([color_u8.red, color_u8.green, color_u8.blue])
+    }
+}
+```
+
+1.  Here I'm using an extra `trait` to add this new method into `palette::LinSrgb<f32>` type due to Rust's orphan rule. You can replace the `f32` here to a generic parameter. See [Exercise @sec-p1c2-e-genimpl].
+
+## Questions, Challenges & Future Possibilities {#sec-p1c2-qcfp}
+
+### In our output choice, we split the $[0, 1]$ range evenly. What if we split it unevenly? is that better or worse?
+
+Search for gamma correction, and you might get inspiration from it.
+
+### Build Vec3 & Color Operations with `macro_rules!` {#sec-p1c1-emacroimpl}
+
+Similiar or even repeated codes are bad style in software engineering, and if you're implementing your one Vec3 and/or Color struct, you can easily find similar codes repeatedly appearing in the implementation of math operators. Try to use `macro_rules!` and eliminate those repeated codes.
+
+## Generic implementation of `ToOutputColor`. {#sec-p1c2-e-genimpl}
+
+You might use more color format other than`palette::LinSrgb<f32>`, and most of can could be transformed into the output format. Start by replace `f32` with a generic parameter, and implement it using generic implementation, which shows a great advantage of `Rust`.
+
+Then, `LinSrgb` is also a type defined from other generic type from palette. Read the source code of `palette` and try to extend `ToOutputColor` to a larger range.
+
+::: callout-tip
+## Where to find the source code?
+
+Thanks to `Rust`'s great community, it's easy to find source code for an open source crate without even going to github. Search this crate in crates.io, open the documentation in docs.io, you can find all public identifiers from that crate. Then find the identifiers you're interested in, you can see a `source` text button right to it. Just click it and you can now see the source code. This applies to almost any public identifier that you can find from a crate.
+:::
