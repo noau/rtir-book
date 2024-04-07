@@ -4,6 +4,16 @@ Generally and loosely speaking, a renderer is just a function that takes a scene
 
 ## Linear Algebra
 
+We'll use simply 3rd-party linear algebra crate built for computer graphics - `glam`.
+
+::: callout-important
+## Own implementation
+
+Implement your own linear algebra crate is not so hard, but it's boring and waste to build a lot similar functions, or costs time to deal with macros. The second generation of `Rust`'s `macro` system is coming, and I'll add a section describing these things then.
+:::
+
+`glam` provides a lot useful data structures and functions for us. What we usually use are `Vec3`, `Mat3`, and `Mat4`. Just as their names have described, they implemented common functionalities that are expected as linear algebra types, like add, subtract, dot product, etc. We'll be using them constantly, and I assume you have learned about very basic linear algebra, so I'll not introduce them now.
+
 ## Image and Pixel Format
 
 Currently in our renderer, an image is a 2D array, with each location representing a color. But a real image contains more than that, with a lot more considerations about like image compression to save storage space. But we won't deal with that complexity and just delegate it to some other dependencies.
@@ -111,6 +121,35 @@ impl ToOutputColor for palette::LinSrgb<f32> {
 
 1.  Here I'm using an extra `trait` to add this new method into `palette::LinSrgb<f32>` type due to Rust's orphan rule. You can replace the `f32` here to a generic parameter. See [Exercise @sec-p1c2-e-genimpl].
 
+Now try to test this code. Thanks to `Rust`'s built-in test functionality, we can write unit tests simply in the same `.rs` file like this:
+
+``` rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_output() {
+        assert_eq!( // <1>
+            Rgb::from([255, 255, 255]),
+            palette::LinSrgb::new(1.0, 1.0, 1.0).to_output_color()
+        );
+        assert_eq!(
+            Rgb::from([0, 0, 0]),
+            palette::LinSrgb::new(0.0, 0.0, 0.0).to_output_color()
+        );
+        assert_eq!(
+            Rgb::from([128, 128, 128]),
+            palette::LinSrgb::new(0.5, 0.5, 0.5).to_output_color()
+        );
+    }
+}
+```
+
+1.  Note that the sequence of first and second parameter is totally not important.
+
+Run this test by `cargo test`, and now you can see that all your tests, though only one by now, are passed!
+
 ## Questions, Challenges & Future Possibilities {#sec-p1c2-qcfp}
 
 ### In our output choice, we split the $[0, 1]$ range evenly. What if we split it unevenly? is that better or worse?
@@ -121,7 +160,7 @@ Search for gamma correction, and you might get inspiration from it.
 
 Similiar or even repeated codes are bad style in software engineering, and if you're implementing your one Vec3 and/or Color struct, you can easily find similar codes repeatedly appearing in the implementation of math operators. Try to use `macro_rules!` and eliminate those repeated codes.
 
-## Generic implementation of `ToOutputColor`. {#sec-p1c2-e-genimpl}
+### Generic implementation of `ToOutputColor`. {#sec-p1c2-e-genimpl}
 
 You might use more color format other than`palette::LinSrgb<f32>`, and most of can could be transformed into the output format. Start by replace `f32` with a generic parameter, and implement it using generic implementation, which shows a great advantage of `Rust`.
 

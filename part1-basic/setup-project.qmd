@@ -36,7 +36,7 @@ Now finally we're going to create our project and select a bunch of 3-rd party d
 ``` shell
 crago new ray-tracer --bin
 cd ray-tracer
-cargo add # This is the list of 3-rd party dependencies
+cargo add glam image palatte log env_logger # This is the list of 3-rd party dependencies
 ```
 
 We specify `--bin` to create an executable project(more precisely, a binary crate). If you lost that, you can just add a `main.rs` file under the `src` folder in your project and add these three lines of code:

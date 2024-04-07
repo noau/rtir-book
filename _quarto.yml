@@ -24,7 +24,7 @@ book:
     - part: part1-basic/part1.qmd
       chapters:
         - part1-basic/setup-project.qmd
-        - part1-basic/colors.qmd
+        - part1-basic/geo-colors.qmd
   appendices:
     - references.qmd
   page-footer:
