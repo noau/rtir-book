@@ -13,7 +13,7 @@ As a modern language, `Rust` is very easy to install, and there's actually no mu
 
 Open your favorite command line, and type \`rustup show\`, the version of currently installed and active rust will be shown, and my version at this start point is:
 
-```         
+``` bash
 stable-x86_64-pc-windows-msvc (default)
 rustc 1.77.1 (7cf61ebde 2024-03-27)
 ```
@@ -33,7 +33,7 @@ Generally speaking, the go-to choice of Rust editor is `Visual Studio Code` with
 
 Now finally we're going to create our project and select a bunch of 3-rd party dependencies. You can skip the explanation of crates comparison and selection, just initialize your project and read the next chapter. However, please remember that there's a section explaining such things so when you feel uncertain or have some questions about the dependencies, you can refer back here. Don't worry, @sec-p1c1-qcfp concerns only about the dependencies.
 
-``` shell
+``` bash
 crago new ray-tracer --bin
 cd ray-tracer
 cargo add glam image palatte log env_logger # This is the list of 3-rd party dependencies
@@ -49,7 +49,7 @@ fn main() {
 
 This is what the `cargo new` command generate automatically for us. Now run `cargo run` command under the root of your project, i.e., just in the `ray-tracer` folder. You're expected to see:
 
-``` shell
+``` bash
    Compiling ray-tracer v0.1.0 (D:\Projects\ray-tracer)
     Finished dev [unoptimized + debuginfo] target(s) in 1.55s
      Running `target\debug\ray-tracer.exe`
