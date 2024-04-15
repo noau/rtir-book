@@ -5,9 +5,9 @@ license: "CC BY-NC-ND"
 # Preface {.unnumbered}
 
 ::: callout-important
-## WIP
+## WIP | Drafting
 
-This tutorial is still **working in progress** and the code examples are not guaranteed to be correct currently!
+This tutorial is still **working in progress**, at a very early stage and the code examples are not guaranteed to be correct currently!
 :::
 
 This is a book inspired by [Peter Shirley's Ray Tracing In One Weekend Series](https://raytracing.github.io/).

@@ -1,4 +1,4 @@
-# Geometry & Colors
+# Linear Algebra & Colors
 
 Generally and loosely speaking, a renderer is just a function that takes a scene as input, and gives a corresponding image as its output. In this chapter, we'll settle the part of final output for our ray tracer.
 
@@ -80,7 +80,7 @@ We could use `RGB<f32>` as before for our rendering pixel. But I'll another colo
 
 First you need a way to represent the three components of rgb color together, you can use a `struct Color` with three member of type `f32`. Then you need to provide some useful 'constructors' for it, including `new(r, g, b)`, `new_mono(g)`. Then implementing some necessary and useful builtin traits, including `Debug`, `Clone`, `Copy`, etc. And there should also be a `From<Vec3>` and `Into<Vec3>` implementation that we can do more operation through `Vec3`.
 
-Then there're lots of works to do for math operators. Implement `Add`, `Sub`, `Mul`, `Div` for `Color`, `Vec3` and `f32`. There're ways to reduce those similar and verbose codes, see [Exercise @sec-p1c2-emacroimpl].
+Then there're lots of works to do for math operators. Implement `Add`, `Sub`, `Mul`, `Div` for `Color`, `Vec3` and `f32`. There're ways to reduce those similar and verbose codes, see [Exercise @sec-p1c2-e-genimpl].
 
 Also, we need a `clamp` method that clamp each component into the $[0, 1]$ range so it won't overflow/down-flow when converting it to the output format.
 
