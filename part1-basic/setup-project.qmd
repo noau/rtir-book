@@ -1,0 +1,67 @@
+# Project Setup
+
+Previously I have said that most chapters in this book are organized in a structured form, but unfortunately, this is not.
+
+We'll set up the environment step by step, and also create the project, adding some necessary dependencies. I'll also explain something important like versioning, testing and coding conventions in this chapter, but you can use your own style. However please don't just code without any criterion. It will mess every up and make it hard to maintain - remember that you're going to build a software containing over 20files with (in my approximation) 10k+ lines of codes.
+
+## Rust Installation
+
+As a modern language, `Rust` is very easy to install, and there's actually no much to say. Open the [Rust website](https://www.rust-lang.org/), click `installation` and follow the instructions is just fine. If you have gone through *The Rust Programming Language*, you should already installed it. The only problem might be the Rust version and edition mechanism. By the time I started writing this book, the current Rust edition is `2021` and it's 2024 now, so in a few months the `2024` edition will come out. And for sake of time, I won't correct the code before all the 3 parts have been initially written.
+
+::: callout-important
+### My Rust Version
+
+Open your favorite command line, and type \`rustup show\`, the version of currently installed and active rust will be shown, and my version at this start point is:
+
+``` bash
+stable-x86_64-pc-windows-msvc (default)
+rustc 1.77.1 (7cf61ebde 2024-03-27)
+```
+
+I regularly subscribe news from the Rust community and update my Rust version whenever possible. if you hope that the code examples from this tutorial to be usable by just copying, just use the latest Rust version with 2021 edition. The time I switch to 2024 edition, I'll note in the preface.
+
+In the final revised version, this problem won't exist and I'll stick to one specific version and update all codes in this tutorial.
+:::
+
+### Editor
+
+You can choose any editor you like, but some are more recommended and widely used in the Rust community.
+
+Generally speaking, the go-to choice of Rust editor is `Visual Studio Code` with `rust-analyzer` plugin. In this tutorial, I also recommend using `JetBrains RustRover`. The reason I chose the later one is its great functionalities for refactoring. Since this is a step-by-step guide from scratch and to make sure that we won't be lost easily, we'll use many many dirty code during development, and refactor becomes so important that you can easily waste a lot of time on and even lost your interest. But whichever you choose, enjoy yourself in the Rust world!
+
+## Create Project
+
+Now finally we're going to create our project and select a bunch of 3-rd party dependencies. You can skip the explanation of crates comparison and selection, just initialize your project and read the next chapter. However, please remember that there's a section explaining such things so when you feel uncertain or have some questions about the dependencies, you can refer back here. Don't worry, @sec-p1c1-qcfp concerns only about the dependencies.
+
+``` bash
+crago new ray-tracer --bin
+cd ray-tracer
+cargo add glam image palatte log env_logger # This is the list of 3-rd party dependencies
+```
+
+We specify `--bin` to create an executable project(more precisely, a binary crate). If you lost that, you can just add a `main.rs` file under the `src` folder in your project and add these three lines of code:
+
+``` rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+This is what the `cargo new` command generate automatically for us. Now run `cargo run` command under the root of your project, i.e., just in the `ray-tracer` folder. You're expected to see:
+
+``` bash
+   Compiling ray-tracer v0.1.0 (D:\Projects\ray-tracer)
+    Finished dev [unoptimized + debuginfo] target(s) in 1.55s
+     Running `target\debug\ray-tracer.exe`
+Hello, world!
+```
+
+## 3-rd Party Dependencies {#sec-dependencies}
+
+### Linear Algebra: `glam` 
+
+### Image Handling: `image`
+
+### Color Management: `Palatte`
+
+## Questions, Challenges & Future Possibilities {#sec-p1c1-qcfp}

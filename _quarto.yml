@@ -21,6 +21,11 @@ book:
     style: "docked"
   chapters:
     - index.qmd
+    - part: part1-basic/part1.qmd
+      chapters:
+        - part1-basic/setup-project.qmd
+        - part1-basic/geo-colors.qmd
+        - part1-basic/film.qmd
   appendices:
     - references.qmd
   page-footer:
@@ -53,5 +58,5 @@ bibliography: references.bib
 
 format:
   bookup-html:
-        toc: true
-        toc-depth: 3
+    toc: true
+    toc-depth: 3
