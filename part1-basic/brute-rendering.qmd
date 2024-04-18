@@ -1,0 +1,165 @@
+# Brute Force Ray-Tracing
+
+This chapter looks a bit long, but in we'll discuss and implement the core pipeline of a brute force ray tracer, with the only geometry supported - sphere, without materials. However, this will form the very basic of our renderer, and all following chapters is to add more functionalities to it, without big changes in the core logic.
+
+## Core Rendering Flow
+
+![Renderer Main Flow](/images/renderer-flow.svg){#fig-main-flow fig-align="center"}
+
+As shown in @fig-main-flow, there're generally three phases. After we start the renderer, we'll first load the scene into the memory, then we'll configure some parameters specified to set the renderer to a good state for rendering. After all preparation, we'll finally start rendering the scene to our film, and save the result.
+
+### Scene
+
+Ideally, we should have a file format to describe the scene. The scene contains not only all the geometries with their location, materials, etc. Actually, the so called scene here contains also other necessary things like HDRIs, camera parameters, and rendering algorithms.
+
+However, to start more simply, we just use a simple function instead. This function should construct the scene when called, and just return it to the caller so we can use it for later process. It should also accept a parameter specifying what scene we want, because we may add support for scene description file in Part 3, and we can leave those hard-coded scenes as sample scenes.
+
+### Renderer Configuration
+
+There're two places where renderer configurations come from, one is the scene description file and the other one is cli parameters. However, at this starting stage, we have none of them. So by now all parameters will be specified in the scene construction function, all hard-coded.
+
+This phase is designed here so that we can override the parameters in scene description with cli parameters. It should also resolve all conflicting/impossible parameters to avoid rendering errors. Things like progress bar and previewer should also be set up here. Note that **not all** parameters would/should be configured here. For example, the log control will be taken into consideration at the very early stage, even before we're trying to parse cli parameters later when we start to add a usable interface.
+
+### Rendering
+
+Absolutely the rendering phase is core of most renderer, so we'll break it down into a lot pieces, and explain them in the whole next section.
+
+## Rendering in Pieces
+
+::: callout-important
+## Figures
+
+There should be a lot figures explaining those rendering process. They'll be added later at the end of first draft.
+:::
+
+### Pixel Rendering
+
+Let's first focus on one pixel on the image. Like the sketch of our virtual camera, we can try to get the color at this pixel by sending a ray from the camera center through the pixel, and calculate the color seen along this ray. However, the pixel is a plane, where our ray should have only one intersection point with it. This means that by this way, we can only get the color of one point in the pixel, which sounds bad.
+
+How can we get the color of the whole pixel? Well, we cannot get it actually, if we use only one ray. And unless if you use infinite rays, you can never specify all colors on this pixel! However, the pixel can have only one pixel, so we can just use the color of one ray, right?
+
+Well. As shown in the figure, it is possible that one pixel could actually contains several different colors, especially at the edge of the geometry. If we just we one ray to test the color, we can only have one color, either one side or another side. This sound even worse! What we're really expecting should be some mixture of those colors, that makes our eyes satisfied. Intuitively our solution is to send a lot rays whose intersection points with the film should all lies in the pixel, and we can use the means of all colors from every ray, so that we can have the mixed color. Every ray is called a sample, and the amount of rays we use for one pixel is call samples per pixel, or spp, which is almost the most important parameter of a pure ray tracer.
+
+### Ray Rendering
+
+To figure out how we can get the color along a ray, there're several questions to be answered. Fisrt, we all know color is a property of light, and in physical world, light come from the outside of the camera, through lens, and finally hit the film, but why do we send ray starting inside the camera?
+
+Well, in physics, as we've learned, studies of light at macroscopic level are classified into two categories - geometric optics and wave optics. What we've assumed as a preliminary in this renderer, is that, lights in our world follows geometric optical law. So we can say that light travels in straight lines, and the light path is reversible. This means that we can track the light reversely from the end of the light path, i.e., we can send ray inside the camera and finally reach the light source!
+
+But this leads to another question - how would we simulate light source? Accurate simulation of light sources requires some more works on physical property, and this would be achieved in Part 2. For now, we're going to use a simpler method, and this requires us to discuss about the interaction when the ray hits a geometry object.
+
+When a ray hit an object, we'll calculate some related properties related to this intersection point, like its location in 3D space and on the ray, and the surface normal at this point. Those properties along with some useful information like the material at this point will be recorded, in my `Rust` implement, in a `Intersection` struct.
+
+Then we'll calculate the interaction of the light and the surface at this point. When the light hits the surface, possibly some energy of the light will be absorbed. Left energy would spread further. Most of time those energy will be scatter into other rays, so we'll do the same **Ray Rendering** process for them, recursively. Some materials allows transmission. Under that scenario, some part of energy will become transmission ray, and we also apply **Ray Rendering** process to it. After calculating all those generated rays, we'll add all contributions of them together, and get the final result of this ray. Now the light source comes. Currently in this simple ray tracer, we assume that one material could either emit light, or scatter light, without mixed capabilities to both emit and scatter light. So a ray will have no energy carried unless it encounters a light source, so we can say that a light source is where we can directly obtain the color of the ray without the need to scatter it, and that's why our renderer is not physically plausible now.
+
+Some trivial light like emitting material will be implemented later in this part.
+
+### Image Rendering
+
+We now have the capability to render a pixel. So intuitively, we can render pixels in a image one by one, and that's totally usable. However, this process could be slow and time-consuming, especially when the scene is complex or the result image has high resolution. There're many algorithms trying to improve the performance, like use efficient data structure to accelerate the calculation of ray-scene intersection, that will be discussed soon. However, there's a simple and intuitive way to accelerate the rendering process, i.e., render the image in a parallel fashion. The most direct thought is to calculate every pixel in a thread, but that means we'll need millions of threads, that is impossible. And the performance cost of frequently create and switch between threads is also huge.
+
+Our choice is to render the image in tiles. By splitting the whole image into to some small tiles, like $32 \times 32$, we can both have the performance improvement of parallel rendering, and avoid the cost of too much thread operation.
+
+## Implementation Design
+
+### Ray & Camera
+
+To start, we'll need a type representing ray. The math formula of ray could be written in a parametric form, $p = \mathbf o + t \mathbf d$, where $\mathbf o$ is the origin of the ray, and $\mathbf d$ points at the direction. If $\mathbf d$ is a unit vector, the parameter $t$ has the property that $|\mathbf d|$ is the length of the ray.
+There's no need to store `t` within the ray since we can calculate it on demand, and the ray type is trivial to implement and use. Therefore a method for evalute the point at parameter `t` is also needed.
+
+### Geometry Object & Sphere
+
+### Material & Phong Shading
+
+### Scene Loader & Scene
+
+### Main Method
+
+## Implementation
+
+### Ray
+
+The ray type is trivial to implement. One thing to be noted is that we hope the direction of a ray should always be unit vector. We'll achieve this by a small trick: wrapper pattern as smart pointer. This trick is used on `Vector` instead of `Ray`, as following:
+
+``` Rust
+#[derive(Debug, Copy, Clone)]// <1>
+pub struct UnitVector3(Vec3); 
+
+impl UnitVector3 {
+    pub fn new(v: Vec3) -> Self {
+        Self(v.normalize())
+    }
+}
+
+impl Deref for UnitVector3 { // <2>
+    type Target = Vec3;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for UnitVector3 { // <3>
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+```
+1. Extra traits like `From<Vec3>` and `Default` are omitted.
+2. What actually used in my code is to implement those two trait automatically using `derive_more` crate, with `#[derive(Deref, DerefMut)]`. This one here is only for demostration.
+3. `DerefMut` requires `Deref` to be implemented, and use the same `Target` type as `Deref`.
+
+And we can test its corectness:
+
+``` Rust
+#[test]
+fn test_unit_vector() {
+    let v = Vec3::new(2.0, 0.0, 0.0);
+    let unit_v = UnitVector3::new(v);
+    assert_eq!(unit_v.x, 1.0);
+    assert_eq!(unit_v.y, 0.0);
+    assert_eq!(unit_v.z, 0.0);
+    assert_eq!(unit_v.length(), 1.0);
+}
+```
+
+So the `Ray` could be like this:
+
+```Rust
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: UnitVector3,
+}
+
+impl Ray {
+    pub fn new(origin: Vec3, direction: UnitVector3) -> Self {
+        Self { origin, direction }
+    }
+
+    pub fn evaluate(&self, t: f32) -> Vec3 {
+        self.origin + self.direction.0 * t // <1>
+    }
+}
+```
+1. Note that here we still need to use `self.direction.0` instead of `self.direction`. Although the method `mul` defined in `Mul` was brought into `UnitVector3`(throught `Deref` and `DerefMut`), the type `UnitVector3` it self cannot be used in operator since `Mul` is not implemented for it.
+
+Write a test for it. This should be very easy to test.
+
+### Primitive
+
+### Sphere
+
+### Material
+
+### Phong Shading
+
+### Scene
+
+### Camera
+
+## Questions, Challenges & Future Possibilities {#sec-p1c4-qcfp}
+
+### Wrapper Pattern for `Film` Implementation {#sec-p1c4-qcfp-wrapper-film}
+
+As we've seen in @sec-film, we've chosen to implement `Film` as a type alias to `Array2`. However, we can do the same thing with the wrapper pattern and `Deref` trick introduced in this chapter, with even better result. Try it in your code.

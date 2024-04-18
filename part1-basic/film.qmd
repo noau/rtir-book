@@ -1,4 +1,4 @@
-# Film
+# Film {#sec-film}
 
 Imagine you're taking a photo with your phone. Light from your environment come into the camera, across a bunch of lens, and finally hit the sensor - that's what we're going to do in this chapter, where the rendering result of our renderer will be stored!
 
@@ -75,26 +75,38 @@ pub type FilmTileMut<'a> = ArrayViewMut<'a, Color, Ix2>;
 pub trait FilmExt {
     // ...
     
-    fn tile_based_parallel<E, F>(&mut self, tile_size: E, f: F) // <1>
-        where
-            E: IntoDimension<Dim=Ix2>,
-            F: Fn(FilmTileMut<'_>) + Send + Sync;
+    fn whole_tile<F>(&mut self, f: F) // <1>
+    where
+        F: Fn(FilmTileMut<'_>) + Send + Sync;
+    
+    fn tile_based_parallel<E, F>(&mut self, tile_size: E, f: F) // <2>
+    where
+        E: IntoDimension<Dim=Ix2>,
+        F: Fn(FilmTileMut<'_>) + Send + Sync;
 }
 
 impl FilmExt for Film {
     // ...
 
-    fn tile_based_parallel<E, F>(&mut self, tile_size: E, f: F)
-        where
-            E: IntoDimension<Dim=Ix2>,
-            F: Fn(FilmTileMut<'_>) + Send + Sync,
+    fn whole_tile<F>(&mut self, f: F)
+    where
+        F: Fn(FilmTileMut<'_>) + Send + Sync,
     {
-        Zip::from(self.exact_chunks_mut(tile_size)).par_for_each(f); // <2>
+        f(self.view_mut())
+    }
+
+    fn tile_based_parallel<E, F>(&mut self, tile_size: E, f: F)
+    where
+        E: IntoDimension<Dim = Ix2>,
+        F: Fn(FilmTileMut<'_>) + Send + Sync,
+    {
+        Zip::from(self.exact_chunks_mut(tile_size)).par_for_each(f); // <3>
     }
 }
 ```
-1. If we follow the common naming convention in the `Rust` community, the name here should be `tile_based_parallel_mut`. However, this might be too long, and almost every time we call this method, we would modify the original array, so we can eliminate the `_mut` suffix as well as the immutable version here.
-2. Note that we're using `exact_chunks_mut` as stated above that we need the mutability.
+1. To treat the tiled and un-tiled version in the same way, we also add a `whole_tile` method which provides similiar interfce as the tiled version.
+2. If we follow the common naming convention in the `Rust` community, the name here should be `tile_based_parallel_mut`. However, this might be too long, and almost every time we call this method, we would modify the original array, so we can eliminate the `_mut` suffix as well as the immutable version here.
+3. Note that we're using `exact_chunks_mut` as stated above that we need the mutability.
 
 Based on the test above, write another version for this and test the correctness of this parallel version. If you used some I/O or time-wasting code, you can add `#[ignore]` to the test and run it only when you want.
 
