@@ -64,8 +64,33 @@ Our choice is to render the image in tiles. By splitting the whole image into to
 
 ### Ray & Camera
 
-To start, we'll need a type representing ray. The math formula of ray could be written in a parametric form, $p = \mathbf o + t \mathbf d$, where $\mathbf o$ is the origin of the ray, and $\mathbf d$ points at the direction. If $\mathbf d$ is a unit vector, the parameter $t$ has the property that $|\mathbf d|$ is the length of the ray.
-There's no need to store `t` within the ray since we can calculate it on demand, and the ray type is trivial to implement and use. Therefore a method for evalute the point at parameter `t` is also needed.
+To start, we'll need a type representing ray. The math formula of ray could be written in a parametric form, $p = \mathbf o + t \mathbf d$, where $\mathbf o$ is the origin of the ray, and $\mathbf d$ points at the direction. If $\mathbf d$ is a unit vector, the parameter $t$ has the property that $|\mathbf d|$ is the length of the ray. There's no need to store `t` within the ray since we can calculate it on demand, and the ray type is trivial to implement and use. Therefore a method for evalute the point at parameter `t` is also needed.
+
+Then we will also need a type representing the virtual camera. The ray starts at the center of our camera, and its direction is determined by sample point of the pixel on the film plane. So what we only need for virtual camera type is those two things. However, to allow more different types of camera, the process for generating a sample ray for a pixel will be extracted to some types. Here's why.
+
+The most intuitive way to generate a sample way is described as above, the ray crossing the center and the sample point. However, there're multiple different way to choose the two points. When you generate in the way above, you'll get an effect of so called perspective projection. But there's also orthogonal projection. There's also a trick to implement the caustics, that is to randomly choose a start point in a small area around the center. Another trick about this is how to choose the sample point on the film for a pixel. We can choose a random point around within the pixel, but we can also divide the pixel by the number of sample count, and choose one pixel for one small area, called jittering, or stratified samples. The theory will be introduced later, but it usually provides a better result. So we can use two types to model this - `SampleStartGenerator` and `SamplePointGenerator`.
+
+::: callout-note
+## The two auxiliary types
+
+The logic for generating sample point and sample ray origin is actually included in the camera instead of in the types, so they're actually just classifying types to determine the behavior of the camera, however you can still move the logic in them, which may give you more flexibility. See [Exercise @sec-p1c4-qcfp-trait-generator].
+:::
+
+However, besides those, we'll also need some other parameters to determine the looking direction and field of view of the camera. This involves how to determine the local coordinate of the camera. For this local coordinate, we choose the positive $x$ direction pointing the right of the camera, and the positive $y$ direction up. Following right hand convention, the positive $z$ direction will point backwards, in the opposite direction of our ray. When constructing a camera, we require the user to provide the position $\mathbf p$, the $\mathbf u$ direction, i.e., the up direction and a point, $\mathbf t$, that the camera is looking at, where $\mathbf p$ and $\mathbf t$ must be different and the $\mathbf u$ direction mustn't lies on the line of . Then we'll calculate formed by $\mathbf p$ and $\mathbf t$. Then we can construct the coordinate by following steps: the positive $\mathbf z$ direction is simply got by $- \frac{(\mathbf t - \mathbf p)}{|\mathbf t - \mathbf p|}$, i.e., the normalized opposite direction of looking direction. Then we can have the positive $\mathbf x$ direction by a cross product, $\frac{\mathbf u \times \mathbf z}{|\mathbf u \times \mathbf z|}$. A final cross product gives us the correct $\mathbf y$ direction, $\mathbf z \times \mathbf x$, without the need to normalize since it is already.
+
+Then some other parameters are need to determine the film. The first thing is the resolution, which will be used to construct a corresponding film with same size. Another one is the field of view of our camera. This involves a design decision. There's a probability that you can specify a camera with both horizontal and vertical FOV set at 80 degree, but output the image in a different aspect ratio, like the commonly used $1280 \times 720$. However I didn't choose this, if you're interested in this, see [Exercise @sec-p1c4-qcfp-irr-ratio]. There's also a problem about the relative positive position of camera center and the film. We assume that originally the camera center will be projected to the center of the film, but an offset could be passed to adjust it along x and/or y axis (under the camera space).
+
+So the parameters needed are a film reference (for resolution), and a vertical FOV. Using those, we'll construct a virtual film for our camera that helps us generate rays. We assume the height out our virtual film is always $2$ meters. The length from the center to the virtual film could be calculated with vertical FOV, as $d = \frac{1}{tan \frac{FOV}{2}} = cot \frac{FOV}{2}$. The width of virtual film could be calculated with aspect ratio, i.e., $width = 2 \frac{film\_width}{film\_height}$. We'll let the camera generate a sample for a pixel by passing its index $(i, j)$, so we need a way to calculate the area of that pixel quickly. This is actually easy by storing the top left position of the top left pixel, $\mathbf o$, and the size of the pixel along positive $x$ and negative $y$ direction, $\mathbf{dx}$ and $\mathbf{dy}$, so that the top left corner of pixel $(i, j)$ is thus $\mathbf o + i\mathbf{dx} + j \mathbf{dy}$. They can be calculated as following:
+
+$$
+\begin{aligned}
+\mathbf o &= \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x - \frac{height}{2} \mathbf y = \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x - \mathbf y \\
+\mathbf {dx} &= width \frac{\mathbf x}{film\_width} \\
+\mathbf {dy} &= - height \frac{\mathbf y}{film\_height} = - \frac{2 \mathbf y}{film\_height}
+\end{aligned}
+$$
+
+So when a user call the camera to generate a sample ray for pixel $(i, j)$ as the $k$th sample, it should first calculate the top left corner of that pixel by above formulas, and pass it with $\mathbf{dx}$, $\mathbf{dy}$ and $k$ to the `SamplePointGenerator` for a sample point. Then the sample point (used for caustics mentions above) with some other necessary information (if any) would be passed to `SampleStartGenerator` for a start point of the ray, and finally give out the ray defined by this two point.
 
 ### Geometry Object & Sphere
 
@@ -81,7 +106,7 @@ There's no need to store `t` within the ray since we can calculate it on demand,
 
 The ray type is trivial to implement. One thing to be noted is that we hope the direction of a ray should always be unit vector. We'll achieve this by a small trick: wrapper pattern as smart pointer. This trick is used on `Vector` instead of `Ray`, as following:
 
-``` Rust
+``` rust
 #[derive(Debug, Copy, Clone)]// <1>
 pub struct UnitVector3(Vec3); 
 
@@ -105,13 +130,14 @@ impl DerefMut for UnitVector3 { // <3>
     }
 }
 ```
-1. Extra traits like `From<Vec3>` and `Default` are omitted.
-2. What actually used in my code is to implement those two trait automatically using `derive_more` crate, with `#[derive(Deref, DerefMut)]`. This one here is only for demostration.
-3. `DerefMut` requires `Deref` to be implemented, and use the same `Target` type as `Deref`.
+
+1.  Extra traits like `From<Vec3>` and `Default` are omitted.
+2.  What actually used in my code is to implement those two trait automatically using `derive_more` crate, with `#[derive(Deref, DerefMut)]`. This one here is only for demostration.
+3.  `DerefMut` requires `Deref` to be implemented, and use the same `Target` type as `Deref`.
 
 And we can test its corectness:
 
-``` Rust
+``` rust
 #[test]
 fn test_unit_vector() {
     let v = Vec3::new(2.0, 0.0, 0.0);
@@ -125,7 +151,7 @@ fn test_unit_vector() {
 
 So the `Ray` could be like this:
 
-```Rust
+``` rust
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Ray {
     pub origin: Vec3,
@@ -142,7 +168,8 @@ impl Ray {
     }
 }
 ```
-1. Note that here we still need to use `self.direction.0` instead of `self.direction`. Although the method `mul` defined in `Mul` was brought into `UnitVector3`(throught `Deref` and `DerefMut`), the type `UnitVector3` it self cannot be used in operator since `Mul` is not implemented for it.
+
+1.  Note that here we still need to use `self.direction.0` instead of `self.direction`. Although the method `mul` defined in `Mul` was brought into `UnitVector3`(throught `Deref` and `DerefMut`), the type `UnitVector3` it self cannot be used in operator since `Mul` is not implemented for it.
 
 Write a test for it. This should be very easy to test.
 
@@ -158,8 +185,18 @@ Write a test for it. This should be very easy to test.
 
 ### Camera
 
+Film will not be included in the camera. Actually, this camera is just a virtual camera as a rendering helper.
+
 ## Questions, Challenges & Future Possibilities {#sec-p1c4-qcfp}
 
 ### Wrapper Pattern for `Film` Implementation {#sec-p1c4-qcfp-wrapper-film}
 
 As we've seen in @sec-film, we've chosen to implement `Film` as a type alias to `Array2`. However, we can do the same thing with the wrapper pattern and `Deref` trick introduced in this chapter, with even better result. Try it in your code.
+
+### Irrelated Film and Virtual Film Aspect Ratio {#sec-p1c4-qcfp-irr-ratio}
+
+This is pretty trivial. Just provide a new horizontal FOV parameter and modify the constructor of camera accordingly.
+
+### Logic in `SamplePointGenerator` and `SampleStartGenerator` {#sec-p1c4-qcfp-trait-generator}
+
+This is actually easy and intuitive. Consider even to extract new `trait` for each one of them and make it more flexible, although unnecessary and useless most of the time.
