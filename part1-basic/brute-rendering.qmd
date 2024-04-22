@@ -66,15 +66,9 @@ Our choice is to render the image in tiles. By splitting the whole image into to
 
 To start, we'll need a type representing ray. The math formula of ray could be written in a parametric form, $p = \mathbf o + t \mathbf d$, where $\mathbf o$ is the origin of the ray, and $\mathbf d$ points at the direction. If $\mathbf d$ is a unit vector, the parameter $t$ has the property that $|\mathbf d|$ is the length of the ray. There's no need to store `t` within the ray since we can calculate it on demand, and the ray type is trivial to implement and use. Therefore a method for evalute the point at parameter `t` is also needed.
 
-Then we will also need a type representing the virtual camera. The ray starts at the center of our camera, and its direction is determined by sample point of the pixel on the film plane. So what we only need for virtual camera type is those two things. However, to allow more different types of camera, the process for generating a sample ray for a pixel will be extracted to some types. Here's why.
+Then we will also need a type representing the virtual camera. The ray starts at the center of our camera, and its direction is determined by sample point of the pixel on the film plane. So what we only need for virtual camera type is those two things.
 
-The most intuitive way to generate a sample way is described as above, the ray crossing the center and the sample point. However, there're multiple different way to choose the two points. When you generate in the way above, you'll get an effect of so called perspective projection. But there's also orthogonal projection. There's also a trick to implement the caustics, that is to randomly choose a start point in a small area around the center. Another trick about this is how to choose the sample point on the film for a pixel. We can choose a random point around within the pixel, but we can also divide the pixel by the number of sample count, and choose one pixel for one small area, called jittering, or stratified samples. The theory will be introduced later, but it usually provides a better result. So we can use two types to model this - `SampleStartGenerator` and `SamplePointGenerator`.
-
-::: callout-note
-## The two auxiliary types
-
-The logic for generating sample point and sample ray origin is actually included in the camera instead of in the types, so they're actually just classifying types to determine the behavior of the camera, however you can still move the logic in them, which may give you more flexibility. See [Exercise @sec-p1c4-qcfp-trait-generator].
-:::
+The most intuitive way to generate a sample way is described as above, the ray crossing the center and the sample point. However, there're multiple different way to choose the two points. When you generate in the way above, you'll get an effect of so called perspective projection. But there's also orthogonal projection. There's also a trick to implement the caustics, that is to randomly choose a start point in a small area around the center. Another trick about this is how to choose the sample point on the film for a pixel. We can choose a random point around within the pixel, but we can also divide the pixel by the number of sample count, and choose one pixel for one small area, called jittering, or stratified samples. The theory will be introduced later, but it usually provides a better result. So we need to include two parameters describing those effects.
 
 However, besides those, we'll also need some other parameters to determine the looking direction and field of view of the camera. This involves how to determine the local coordinate of the camera. For this local coordinate, we choose the positive $x$ direction pointing the right of the camera, and the positive $y$ direction up. Following right hand convention, the positive $z$ direction will point backwards, in the opposite direction of our ray. When constructing a camera, we require the user to provide the position $\mathbf p$, the $\mathbf u$ direction, i.e., the up direction and a point, $\mathbf t$, that the camera is looking at, where $\mathbf p$ and $\mathbf t$ must be different and the $\mathbf u$ direction mustn't lies on the line of . Then we'll calculate formed by $\mathbf p$ and $\mathbf t$. Then we can construct the coordinate by following steps: the positive $\mathbf z$ direction is simply got by $- \frac{(\mathbf t - \mathbf p)}{|\mathbf t - \mathbf p|}$, i.e., the normalized opposite direction of looking direction. Then we can have the positive $\mathbf x$ direction by a cross product, $\frac{\mathbf u \times \mathbf z}{|\mathbf u \times \mathbf z|}$. A final cross product gives us the correct $\mathbf y$ direction, $\mathbf z \times \mathbf x$, without the need to normalize since it is already.
 
@@ -185,7 +179,112 @@ Write a test for it. This should be very easy to test.
 
 ### Camera
 
-Film will not be included in the camera. Actually, this camera is just a virtual camera as a rendering helper.
+Film will not be included in the camera. Actually, this camera is just a virtual camera as a rendering helper. Following the discussion above, the camera could just be a simple struct holding the camera parameters, like:
+
+``` Rust
+#[derive(Debug, Clone)]
+pub struct Camera {
+    pub position: Vec3,
+    pub coordinate: Mat3,
+    pub spp: NonZeroUsize,
+    spp_jitter: (usize, usize),
+    o: Vec3,
+    d: (Vec3, Vec3),
+    d_jitter: (Vec3, Vec3),
+    pub jittering: bool,
+    pub orthographic: bool,
+    dist: f32,
+}
+```
+
+The only things needing explanation is the two more parameters, `spp_jitter` and `jittering`.
+
+We use $\mathbf o + i\mathbf{dx} + j \mathbf{dy}$ for the location of a pixel, but how can we know the exact area of the sample point when using jittering? The answer is that we need to know how to split one pixel to exact number of smaller areas as spp. I choose to choose two factors of the spp count, $x$ and $y$, where $x \times y = spp$ and $|x-y|$ is minimal. This could lead to a more even distribution of sample points within the pixel, and we can treat them as a smaller 2D array, accessing each one with a single index, i.e., the sample index $k$ in the code in a row-major style. And we can use a similar formula for this that the top left corner of this small area $\mathbf o + i\mathbf{dx} + j \mathbf{dy} + m \frac{\mathbf{d_x}}{x} + n \frac{\mathbf{d_y}}{x}$, where `d_jitter` is the new `m` and `n`, and ${\mathbf{d_x}}{x}$ and ${\mathbf{d_y}}{x}$ are the new `dx` and `dy` for the smaller pixel. Those will also be pre-calucated during the construction of the camera. So the constructor is just:
+
+```Rust
+#[allow(clippy::too_many_arguments)] // <1>
+pub fn new(
+    position: Vec3,
+    look_at: Vec3,
+    up: Vec3,
+    film: &Film, // <2>
+    v_fov: f32,
+    offset: Vec2,
+    spp: NonZeroUsize,
+    jittering: bool,
+    orthographic: bool,
+) -> Self {
+    // Construct camera space coordinate
+    let z = (position - look_at).normalize();
+    let x = up.cross(z).normalize();
+    let y = z.cross(x);
+    let coordinate = Mat3::from_cols(x, y, z);
+
+    // Construct virtual film
+    let dist = 1.0 / (v_fov / 2.0).tan();
+    let width = 2.0 * film.shape()[0] as f32 / film.shape()[1] as f32;
+
+    let o = position - dist * z + (width / 2.0 * x) - y + offset.x * x + offset.y * y;
+    let d = (width * x / film.shape()[0] as f32, -2.0 * y / film.shape()[1] as f32);
+
+    // Break spp into x and y that x * y = spp and both x and y are as close as possible
+    let spp_jitter = find_closest_factors(spp.get());
+    let d_jitter = (d.0 / spp_jitter.0 as f32, d.1 / spp_jitter.1 as f32);
+
+    Self {
+        position,
+        coordinate,
+        spp,
+        spp_jitter,
+        o,
+        d,
+        d_jitter,
+        jittering,
+        orthographic,
+        dist,
+    }
+}
+```
+1. This function contains 9 parameters - too many that clippy will complains about it, so we need to explicitly accept it for this function. Don't allow it globally, it's still a good lint message, those not good for this one.
+2. The `Film` is used since we need to know about the resolution of the film, but it don't actually need to reference it it later or own it.
+
+As warned by clippy, it contains too much parameters. Create a build for it and provide a default settings for camera. This should be easy and it's left as an exercise. Don't forget to provide a `builder()` function for `Camera` that create a default builder so we don't need to remember the name of the builder. 
+
+Then we can generate the ray in two steps, as also describen above:
+
+```Rust
+pub fn generate_ray(&self, (i, j): (usize, usize), k: usize) -> Ray {
+    let p = self.o + i as f32 * self.d.0 + j as f32 * self.d.1;
+    let sample_point = self.generate_sample_point(p, k);
+    let start_point = self.generate_start_point(sample_point);
+    Ray::from_start_end(start_point, sample_point)
+}
+
+fn generate_sample_point(&self, p: Vec3, k: usize) -> Vec3 {
+    let x: f32 = rand::random();
+    let y: f32 = rand::random();
+    let (o, dx, dy) = if self.jittering {
+        (
+            // Treat the small jittering grid as 2D array, with row-major index
+            (k / self.spp_jitter.1) as f32 * self.d_jitter.0
+                + (k % self.spp_jitter.1) as f32 * self.d_jitter.1,
+            self.d_jitter.0,
+            self.d_jitter.1,
+        )
+    } else {
+        (Vec3::splat(0.0), self.d.0, self.d.1)
+    };
+    p + o + x * dx + y * dy
+}
+
+fn generate_start_point(&self, sample: Vec3) -> Vec3 {
+    if self.orthographic {
+        sample + self.coordinate.z_axis * self.dist
+    } else {
+        self.position
+    }
+}
+```
 
 ## Questions, Challenges & Future Possibilities {#sec-p1c4-qcfp}
 
@@ -199,4 +298,4 @@ This is pretty trivial. Just provide a new horizontal FOV parameter and modify t
 
 ### Logic in `SamplePointGenerator` and `SampleStartGenerator` {#sec-p1c4-qcfp-trait-generator}
 
-This is actually easy and intuitive. Consider even to extract new `trait` for each one of them and make it more flexible, although unnecessary and useless most of the time.
+We use two `bool` parameters for the customizing ray generting, but you can actually extract them into new type, with even new traits, as described simply in the question header. This is actually easy and intuitive.
