@@ -88,6 +88,35 @@ So when a user call the camera to generate a sample ray for pixel $(i, j)$ as th
 
 ### Geometry Object & Sphere
 
+First, geometry objects should be able to do intersection test with a given ray. Information about the intersection should be returned and there's csould also be no intersection with that ray. If there is, necessary information that should be returned and remained for later rendering usage includes:
+
+-   Surface normal and is front
+-   Intersection point and the parameter along the ray
+-   Reference to material of the object
+
+Those are the very basic information. Later we'll add more like the uv coordinate of the intersection point on the geometry. The surface normal should point opposite from the ray, i.e., when the ray hit the geometry from outside, the surface should points outwards, and vice versa. The `is front` just indicates if the ray hit the geometry from outside or not. This could be handled by the constructor of the intersection type, with the ray direction, or by the outer caller that constructs the record directly. If given an normal points outwards, and a ray direction, we can just invert the direction of the normal if the dot product between outward normal and the ray direction is positive, and thus the normal points inward. Otherwise we now the normal should remain outwards.
+
+We also require all geometry objects calculate a bounding box to be able to do intersection test more effectively, and we support only AABB for simplicity now. See [PBRT 3.7 Bounding Boxes](https://pbr-book.org/4ed/Geometry_and_Transformations/Bounding_Boxes.html) and [PBRT 6.1.2 Ray-Bounds Intersections](https://pbr-book.org/4ed/Shapes/Basic_Shape_Interface#RayndashBoundsIntersections) for detailed explanations. We also assume that all geometry objects are defined in their local coordinate spaces, centered at the origin without rotation and scaling. Those will be dealt generally in next chapter. Given the AABB, we can have a method to quickly check whether a ray miss an object - if a ray cannot hit even the AABB of the primitive, it can never hit the object itself. We'll provide a general method to test in this way that only gives a boolean value representing whether a ray hits the AABB of the geometry. Another similar method is also required, to calculate whether the ray hits the geometry itself, without further calculation about things like normals.
+
+The first and most widely used geometry primitives in the part 1 are spheres. A sphere could be defined by its center and radius. Since we require objects to be defined in local coordinate system, the center of the sphere is always at the origin, and the only parameter related to its geometric properties is its radius.
+
+So, given the radius $r$ of a sphere, we can write the equation of the sphere, thus every point $\mathbf p$ on the sphere satisfies $|\mathbf p| = r$. Combined with the ray equation, $\mathbf p = \mathbf o + t \mathbf d$, we can have a new equation: $|\mathbf o|^2 + 2 t \mathbf o \cdot \mathbf d + t^2 |\mathbf d| ^ 2 - r^2 = 0$. Using the quadratic formula, wen can sole the result of $t$ easily, thus
+
+$$
+\begin{aligned}
+t &= \frac{-2 \mathbf o \cdot \mathbf d \pm \sqrt{(2 \mathbf o \cdot \mathbf d)^2 - 4 |\mathbf d| ^ 2 (|\mathbf o|^2 - r^2)}}{2|\mathbf d|^2} \\
+&= \frac{-\mathbf o \cdot \mathbf d \pm \sqrt{(\mathbf o \cdot \mathbf d)^2 - |\mathbf d| ^ 2 (|\mathbf o|^2 - r^2)}}{|\mathbf d|^2}
+\end{aligned}
+$$
+
+Since the $\mathbf d$ is always normalized, the value of $|\mathbf d|$ is always $1$, thus the formula could be written as
+
+$$
+t = - \mathbf o \cdot \mathbf d \pm \sqrt{(\mathbf o \cdot \mathbf d)^2 - (|\mathbf o|^2 - r^2)}
+$$
+
+We might have 0, 1 or 2 solutions of $t$, but not all of them are valid. As stated above, the $t$ here is related to the length of the ray, so it must be positive, otherwise, the camera could see objects behind itself. We'll also give $t$ a upper limit, thus the camera can only see objects within a finite rage. However, it might be a little surprising that we'll also give $t$ a lower limit - a small value greater than but not equal to 0. This is due to precision error introduced by float number representation in computers. And it's very intuitive that we should take the smaller solution when there're two different valid solutions the ray hits the nearest point along its way. After calculated $t$, we can have $\mathbf p$ very easily by substitute it in the ray equation, and the normal on the sphere at the point is also equal to $\frac{\mathbf p}{|\mathbf p|}$, given that our sphere is centered on the origin.
+
 ### Material & Phong Shading
 
 ### Scene Loader & Scene
@@ -129,7 +158,13 @@ impl DerefMut for UnitVector3 { // <3>
 2.  What actually used in my code is to implement those two trait automatically using `derive_more` crate, with `#[derive(Deref, DerefMut)]`. This one here is only for demostration.
 3.  `DerefMut` requires `Deref` to be implemented, and use the same `Target` type as `Deref`.
 
-And we can test its corectness:
+::: callout-note
+## Why not auto implement operator traits?
+
+This is because we cannot determine the result type for the operator traits. When you do calculations between `UnitVector`s and normal `Vec3`s, or `f32` values, you can not know whether the result is `UnitVector` or `Vec3`. Though you can always set the result type to `Vec3`, this isn't what the compiler should promise - it's too strong that not everyone wants it.
+:::
+
+And we can test its correctness:
 
 ``` rust
 #[test]
@@ -167,13 +202,285 @@ impl Ray {
 
 Write a test for it. This should be very easy to test.
 
-### Primitive
-
-### Sphere
-
 ### Material
 
 ### Phong Shading
+
+### Primitive
+
+We'll first define the intersection record:
+
+``` rust
+pub struct Intersection {
+    pub ray_length: f32,
+    pub point: Vec3,
+    pub normal: UnitVector3,
+    pub is_front: bool,
+}
+
+impl Intersection {
+    pub fn new(
+        ray_length: f32,
+        point: Vec3,
+        outwards_normal: UnitVector3,
+        ray_direction: UnitVector3,
+    ) -> Self {
+        let (normal, is_front) = Self::adjust_normal(outwards_normal, ray_direction);
+
+        Self {
+            ray_length,
+            point,
+            normal,
+            is_front,
+        }
+    }
+
+    fn adjust_normal(
+        outwards_normal: UnitVector3,
+        ray_direction: UnitVector3,
+    ) -> (UnitVector3, bool) {
+        if ray_direction.dot(outwards_normal.0) > 0.0 {
+            (outwards_normal.neg().into(), false)
+        } else {
+            (outwards_normal, true)
+        }
+    }
+}
+```
+
+Write unit tests for the `Intersection::adjust_normal` method. Don't worry, `Rust` supports unit tests of private methods.
+
+Then we're going to define the axis aligned bounding box following [PBRT 3.7 Bounding Boxes](https://pbr-book.org/4ed/Geometry_and_Transformations/Bounding_Boxes.html):
+
+``` rust
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct AABB {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+```
+
+Here we only defines the so called `Bounds3f`, for we'll use it later only. Other bounds are not used so there's no need to define and implement them, which also leads to simplicity. All functions defined in *PBRT* could also be implemented trivially in our `Rust` version. Useful traits like `Index` and `IndexMut` are implemented too. And since we're using 3rd party linear algebra library, some code could even be simpler. For example, when implementing the `Inside` function as `contains` method, instead of compare x, y, and z components individually, we can just compare the whole vector:
+
+``` rust
+impl AABB {
+    // ...
+
+    pub fn contains(&self, p: Vec3) -> bool {
+        p.cmpge(self.min).bitand(p.cmple(self.max)).all()
+    }
+
+    // ...
+}
+```
+
+Which not only simplifies the code, but also make it more readable and clear. Try to find more useful methods provided by `glam` and use as shorter and clear code as you can. Another thing to be noted is that for the `bouunding_sphere` method, instead return by parameter, we return another struct called `SphereBound` that contains the center and radius of the sphere, like so:
+
+``` rust
+pub struct SphereBound {
+    pub center: Vec3,
+    pub radius: f32,
+}
+
+impl AABB {
+    // ...
+
+    pub fn bounding_sphere(&self) -> SphereBound {
+        let center = (self.min + self.max) / 2.0;
+        SphereBound {
+            center,
+            radius: center.distance(self.max),
+        }
+    }
+
+    // ...
+}
+```
+
+The only troublesome is to write tests for all of them, but it's worthy.
+
+Now we have to consider about the ray-AABB intersection test, which also follows the *PBRT*'s approach:
+
+``` rust
+pub const MACHINE_EPSILON: f32 = f32::EPSILON * 0.5; // <1>
+
+pub fn gamma(x: f32) -> f32 {
+    x * MACHINE_EPSILON / (1.0 - x * MACHINE_EPSILON)
+}
+
+impl AABB {
+    // ...
+
+    pub fn hit(&self, ray: Ray) -> Option<(f32, f32)> {
+        let mut t0 = 0.0;
+        let mut t1 = f32::MAX;
+        for i in 0..3 {
+            let inv_d = 1.0 / ray.direction[i];
+            let mut t_near = (self.min[i] - ray.origin[i]) * inv_d;
+            let mut t_far = (self.max[i] - ray.origin[i]) * inv_d;
+            if t_near > t_far {
+                std::mem::swap(&mut t_near, &mut t_far);
+            }
+
+            t_far *= 1.0 + 2.0 * gamma(3.0); // <2>
+
+            t0 = t_near.max(t0);
+            t1 = t_far.min(t1);
+            if t0 > t1 {
+                return None;
+            }
+        }
+
+        Some((t0, t1))
+    }
+
+    pub fn intersect(&self, ray: Ray, rt_max: f32, inv_d: Vec3, dir_neg: [usize; 3]) -> bool {
+        let mut t_min = (self[dir_neg[0]].x - ray.origin.x) * inv_d.x;
+        let mut t_max = (self[1 - dir_neg[0]].x - ray.origin.x) * inv_d.x;
+        let ty_min = (self[dir_neg[1]].y - ray.origin.y) * inv_d.y;
+        let ty_max = (self[1 - dir_neg[1]].x - ray.origin.y) * inv_d.y;
+
+        if t_min > ty_max || ty_min > t_max {
+            return false;
+        }
+
+        t_min = ty_min.max(t_min);
+        t_max = ty_max.min(t_max);
+
+        let tz_min = (self[dir_neg[2]].z - ray.origin.z) * inv_d.z;
+        let tz_max = (self[1 - dir_neg[2]].z - ray.origin.z) * inv_d.z;
+
+        if t_min > tz_max || tz_min > t_max {
+            return false;
+        }
+
+        t_min = tz_min.max(t_min);
+        t_max = tz_max.min(t_max);
+
+        t_min < rt_max && t_max > 0.0
+    }
+
+    // ...
+}
+```
+
+1.  This is a `const` value more like the `static constexpr` in `C++` than `macro`s.\
+2.  It's better to use an additional trait to define and implement the `gamma` as a method instead of a function. However, the name `gamma` is already used by an unstable feature of `Rust`, so we just use a function instead.
+
+Those're basically plain translation from the *PBRT*'s `C++` code. The original names for this two functions are `Intersect` and `IntersectP`, but I prefer to use `hit` and `intersect` instead. Choose some bounds and rays carefully and test them.
+
+Finally we can define the interface of geometry objects, as a trait, like so:
+
+``` rust
+pub struct SurfaceHit {
+    pub normal: UnitVector3,
+    pub is_front: bool,
+    pub ray_length: f32,
+    pub hit_position: Vec3,
+}
+
+pub trait Shape {
+    fn hit(&self, ray: Ray) -> Option<SurfaceHit>;
+    fn intersect(&self, ray: Ray, rt_max: f32) -> bool;
+    fn aabb(&self) -> AABB;
+}
+```
+
+### Sphere & `enum_delegate`
+
+Thus the `Sphere` definition and implementation is trivial:
+
+``` rust
+pub struct Sphere {
+    pub radius: f32,
+    pub aabb: AABB,
+}
+
+impl Sphere {
+    pub fn new(radius: f32) -> Self {
+        Self {
+            radius,
+            aabb: AABB::from_two_points(Vec3::splat(-radius), Vec3::splat(radius)),
+        }
+    }
+}
+
+impl Shape for Sphere {
+    fn hit(&self, ray: Ray, rt_max: f32) -> Option<SurfaceHit> {
+        let od = ray.direction.dot(ray.origin);
+        let delta = od * od - ray.origin.dot(ray.origin) + self.radius * self.radius;
+        if delta < 0.0 { return None; }
+
+        let delta_sqrt = delta.sqrt();
+        let t1 = -od - delta_sqrt;
+        let t2 = -od + delta_sqrt;
+
+        if t2 <= 0.0 || t1 > rt_max || (t1 <= 0.0 && t2 > rt_max) { return None; }
+
+        let t = if t1 > 0.0 { t1 } else { t2 };
+
+        let hit_position = ray.origin + *ray.direction * t;
+
+        Some(SurfaceHit {
+            normal: hit_position.into(),
+            is_front: ray.direction.dot(hit_position) < 0.0,
+            ray_length: t,
+            hit_position,
+        })
+    }
+
+    fn intersect(&self, ray: Ray, rt_max: f32) -> bool {
+        let od = ray.direction.dot(ray.origin);
+        let delta = od * od - ray.origin.dot(ray.origin) + self.radius * self.radius;
+        if delta < 0.0 { return false; }
+
+        let delta_sqrt = delta.sqrt();
+        let t1 = -od - delta_sqrt;
+        let t2 = -od + delta_sqrt;
+
+        t2 > 0.0 && t1 <= rt_max && (t1 > 0.0 || t2 <= rt_max)
+    }
+
+    fn aabb(&self) -> AABB {
+        self.aabb
+    }
+}
+```
+
+This implementation may not be well-optimized, but it's intuitive and enough for us.
+
+Currently we're using `trait` to define the common behaviour of geometry objects, and we have only one implementation - `Sphere`. We can, indeed, just use the `Sphere` struct everywhere in our code, but later when we add more shapes like planes and boxes, this cannot work. So we need some sort of polymorphism that allows us to have multiple implementations.
+
+Generally we have static and dynamic dispatch in `Rust`. The static dispatch is done at the compile stage, via generics, and the dynamic dispatch is done at the runtime. However, there will be multiple objects in one scene, and most of the time it's not possible they're same type. The container we store all objects, like `Vec`, must be heterogeneous. So must we use dynamic dispatch through `dyn Shape`? Well, actually not so.
+
+When the parameters are given outside our own crate, we actually have only the choice. But in our case, all geometry types are in our own crate, and is known to us. What we have is a known, finite set of `Shape` implementations, and thus, we can use a special way - the `enum`.
+
+The idea is simple. We can just define a `enum` with each variant corresponding to a `Shape` implementation. Then we can just use the `enum` as the object type, which is homogeneous to the type system, but heterogeneous in the implementation. We can implement the `trait` for both the `enum` and the actuall `Shape` implementation types, and simply delegate the implementation of the `trait` for the `enum` to the imeplementation of each variant, the actuall `Shape` implementation.
+
+And you and find the obvious boilerplate here, so the `Rust` community has already given a lot of help to eliminate the boilerplate, through `macro`s. What we're going to use here, is the `enum_delegate` crate.
+
+It's easy to use. Just add `#[enum_delegate::register]` to the trait and `#[enum_delegate::implement(<trait>)]` to the `enum`, like so:
+
+``` rust
+#[enum_delegate::register]
+pub trait Shape {
+    // ...
+}
+
+#[enum_delegate::implement(Shape)]
+pub enum Primitive {
+    Sphere(Sphere) // <1>
+}
+```
+1. This looks weird - the token `Sphere` repeated twice! But don't worry. It's fine. They live in different name spaces. The first `Sphere` is an enum variant and the second one is the struct we define above. And this is not the benefincal of `enum_delegate`. It's just something that vanilla `Rust`'s `enum` accepts.
+
+Besides the relation we've stated above, `From` and `TryInto` traits between the `enum` and `struct`s are also auto-implemented.
+
+::: callout-note
+## Why not `enum_dispatch`?
+
+While `enum_dispatch` is maturer, some IDEs - I mean IDEs from JetBrains - cannot index the codes generated by it correctly, but it seems codes generated by `enum_delegate` are acceptable.
+:::
 
 ### Scene
 
@@ -181,7 +488,7 @@ Write a test for it. This should be very easy to test.
 
 Film will not be included in the camera. Actually, this camera is just a virtual camera as a rendering helper. Following the discussion above, the camera could just be a simple struct holding the camera parameters, like:
 
-``` Rust
+``` rust
 #[derive(Debug, Clone)]
 pub struct Camera {
     pub position: Vec3,
@@ -201,7 +508,7 @@ The only things needing explanation is the two more parameters, `spp_jitter` and
 
 We use $\mathbf o + i\mathbf{dx} + j \mathbf{dy}$ for the location of a pixel, but how can we know the exact area of the sample point when using jittering? The answer is that we need to know how to split one pixel to exact number of smaller areas as spp. I choose to choose two factors of the spp count, $x$ and $y$, where $x \times y = spp$ and $|x-y|$ is minimal. This could lead to a more even distribution of sample points within the pixel, and we can treat them as a smaller 2D array, accessing each one with a single index, i.e., the sample index $k$ in the code in a row-major style. And we can use a similar formula for this that the top left corner of this small area $\mathbf o + i\mathbf{dx} + j \mathbf{dy} + m \frac{\mathbf{d_x}}{x} + n \frac{\mathbf{d_y}}{x}$, where `d_jitter` is the new `m` and `n`, and ${\mathbf{d_x}}{x}$ and ${\mathbf{d_y}}{x}$ are the new `dx` and `dy` for the smaller pixel. Those will also be pre-calucated during the construction of the camera. So the constructor is just:
 
-```Rust
+``` rust
 #[allow(clippy::too_many_arguments)] // <1>
 pub fn new(
     position: Vec3,
@@ -245,14 +552,15 @@ pub fn new(
     }
 }
 ```
-1. This function contains 9 parameters - too many that clippy will complains about it, so we need to explicitly accept it for this function. Don't allow it globally, it's still a good lint message, those not good for this one.
-2. The `Film` is used since we need to know about the resolution of the film, but it don't actually need to reference it it later or own it.
 
-As warned by clippy, it contains too much parameters. Create a build for it and provide a default settings for camera. This should be easy and it's left as an exercise. Don't forget to provide a `builder()` function for `Camera` that create a default builder so we don't need to remember the name of the builder. 
+1.  This function contains 9 parameters - too many that clippy will complains about it, so we need to explicitly accept it for this function. Don't allow it globally, it's still a good lint message, those not good for this one.
+2.  The `Film` is used since we need to know about the resolution of the film, but it don't actually need to reference it it later or own it.
 
-Then we can generate the ray in two steps, as also describen above:
+As warned by clippy, it contains too much parameters. Create a build for it and provide a default settings for camera. This should be easy and it's left as an exercise. Don't forget to provide a `builder()` function for `Camera` that create a default builder so we don't need to remember the name of the builder.
 
-```Rust
+Then we can generate the ray in two steps, as also described above:
+
+``` rust
 pub fn generate_ray(&self, (i, j): (usize, usize), k: usize) -> Ray {
     let p = self.o + i as f32 * self.d.0 + j as f32 * self.d.1;
     let sample_point = self.generate_sample_point(p, k);
