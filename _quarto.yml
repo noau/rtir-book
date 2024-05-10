@@ -26,6 +26,7 @@ book:
         - part1-basic/setup-project.qmd
         - part1-basic/geo-colors.qmd
         - part1-basic/film.qmd
+        - part1-basic/brute-rendering.qmd
   appendices:
     - references.qmd
   page-footer:
