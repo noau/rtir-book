@@ -4,7 +4,7 @@ This chapter looks a bit long, but in we'll discuss and implement the core pipel
 
 ## Core Rendering Flow
 
-![Renderer Main Flow](/images/renderer-flow.svg){#fig-main-flow fig-align="center"}
+![Renderer Main Flow](/images/p1c4/renderer-flow.svg){#fig-main-flow fig-align="center"}
 
 As shown in @fig-main-flow, there're generally three phases. After we start the renderer, we'll first load the scene into the memory, then we'll configure some parameters specified to set the renderer to a good state for rendering. After all preparation, we'll finally start rendering the scene to our film, and save the result.
 
@@ -117,11 +117,68 @@ $$
 
 We might have 0, 1 or 2 solutions of $t$, but not all of them are valid. As stated above, the $t$ here is related to the length of the ray, so it must be positive, otherwise, the camera could see objects behind itself. We'll also give $t$ a upper limit, thus the camera can only see objects within a finite rage. However, it might be a little surprising that we'll also give $t$ a lower limit - a small value greater than but not equal to 0. This is due to precision error introduced by float number representation in computers. And it's very intuitive that we should take the smaller solution when there're two different valid solutions the ray hits the nearest point along its way. After calculated $t$, we can have $\mathbf p$ very easily by substitute it in the ray equation, and the normal on the sphere at the point is also equal to $\frac{\mathbf p}{|\mathbf p|}$, given that our sphere is centered on the origin.
 
-### Material & Phong Shading
+### Material & Diffuse Material
+
+The material handles two things. First, it defines the color on the surface the object. Second, it defines the how the object interact with the light ray. We seperate the first part alone as a concept called `Texture`, responsible for defining colors on the surface, and the whole `Material` concept will model how the light interacts with the object at a given point on the surface - position where the ray hits the object. During this process, the material will use color information from the `Texture`s. This gives us the ability to combine different textures abd materials freely. We'll talk about the `Texture` later when `uv` coordinates are introduced, and by now the only `Texture` is a constant color texture.
+
+For the second part, we'll use a very simple model - uniform diffuse material, called `Lambertian` model. We assume that the surface of the object is perfectly rough, that when a beam of light hit on it, it distribute to all possible directions uniformally. The object will absorb some energy, so there'll be some energy loss. Since we're simulating a single light ray, we can think that it will be reflected to all possible directions with the same possibility. Thus, we just need to generate a random vector that from a uniform distribution on a half unit sphere, and the orient the sphere in the direction of the surface normal. Then we should trace along that new direction, and when we get the color of that reflected ray, we can then know the color of the entry light, by simply multiplying it with the energy loss. And the energy loss could be thought as the color of the object itself.
+
+There's a possibility that when there're multiple objects, this process will never stop or stop after a long time. As the energy decreases along with the reflection time, the contribution after several bouncing will be so small that we can just ignore it. So we can record the 'depth' of the ray. Whenever the ray bounce one time, the depth increases by 1. And whe the depth is larger than one limit we specify, we just stop and claim that this ray accepts no light, or it contribution is too small that is just ignored.
+This process is usually implemented in a recursive way, so the depth is just the depth of the recursion.
+
+So we can now design them generally. The `Texture` describes the functionality to get the color of the object at a given point on the surface. The `uv` coordinate should be included, but we'll ignore them currently and return to this later. The `Material` describes how light interact with the surface. We ask the `Material` to give out the scattered light ray, and the attenuation coefficient, along with other useful information wrapped in another type, `Interaction`. For our simple `Lambertian` material, the `attenuation` is just the surface color.
+
+To randomly generate the scattered ray direction, we need to randomly select a point on the unit sphere and the half of a unit sphere. We use a method called rejection sampling to have a random point uniformly distributed on a unit sphere. The idea is very simple. If we have a function that gives us random numbers uniformly distributed within $[-1, 1]$, we can have a random vector $\mathbf v$ in $[-1, 1]^3$ by simply call the function trice. Since this vector is uniformly distributed within $[-1, 1]^3$, it's also uniform with the unit sphere, so when we have a vector within(or on) the sphere, i.e., $|\mathbf v| <= 1.0$, we can just normalize it and the result is also uniformly distributed on the unit sphere. Note we could instead compare $|\mathbf v|^2$ with $1$ instead of $|\mathbf v|$ since when $|\mathbf v| <= 1$, $|\mathbf v|^2$ is always less than $1$, and this usually cost less calculation(though little).
+
+To generate a vector on a hemisphere, where the axis is given by $\mathbf n$, i.e., the axis vector is perpendicular to the base of the hemisphere, pointing in the direction of the hemisphere and is normalized. We can just use the above method to have a random vector on the sphere, and check whether it's on the required hemisphere. If not, we can mirror it by the base of the hemisphere, as $\mathbf v' = \mathbf v - 2(\mathbf v \cdot \mathbf n) \mathbf n$. So that given the surface normal, we can know the direction of the scattered ray using this method.
 
 ### Scene Loader & Scene
 
+For simplicity, by now, our scene loader is just a function constructing the test scenes. And the scene is simply necessary components along with all geometry objects, and configurations. All geometry objects are store in a, say, array, or `std::vector`(for `C++`) and `Vec`(for `Rust`), i.e. linear tables.
+
+When calculating the intersection between a ray and the scene, we just iterate through all the objects in the scene, and calculate the intersection between the ray with each object, and the nearest one is what we need.
+
 ### Main Method
+
+After all the necessary compoenents, we can now finally design the main process of our renderer and have a runnable ray tracer! Here's the description of the main process:
+
+```bash
+Parse cli parameters
+Check all parameters and init the renderer
+Load the scene
+Start rendering
+Finish rendering and save the result
+Clean up
+```
+
+For the `rendering` part, the code would look like this:
+
+```bash
+for every pixel
+    for every sample
+        generate a ray for this sample
+        render this ray with the scene
+        add the contribution of this ray to this pixel
+```
+
+When rendering a ray, the process is:
+
+```bash
+if the ray exceeds the depth limit
+    ignore this sample
+if the ray hits an object
+    ask the material to define the interaction
+    render the scattered ray
+    if the scatter ray is ignored
+        ignore this sample
+    compute the contribution of the entry ray from the scattered ray
+else
+    compute the contribution of the entry ray from the environment
+```
+
+Some information and utils will be passed through the rendering process, and we call them rendering contexts. This will includes things like the output channel for rays, pixels and tiles, etc.
+
+Generally, there are two types of rendering threads in our renderer. One is the interaction thread that provide the interaction with users, show necessary informations like progress bars and update previews. The renderer result will also be stored here. The best choice of this thread is the main thread. The other type are rendering, or computation threads. Rays, pixels, and tiles will be processed there and they report their result to the interaction thread. So in this way, the renderer must run on a platform supporting multiple threads. But if we just render the pixels one by one, or even render tiles one by one, we should be able to run in one single thread, and the reader could try to implement this, by, say, handling the difference of multi-threads and single thread in the context.
 
 ## Implementation
 
@@ -202,15 +259,87 @@ impl Ray {
 
 Write a test for it. This should be very easy to test.
 
-### Material
+### Material & Diffuse Material
 
-### Phong Shading
+Our `SurfaceColor` and `Surface` traits are simple, they're named so that `Material` and `Texture` could be used for the `enum` type representing the actual implementations. See @sec-sphere-enum_delegate.
+
+```Rust
+pub trait SurfaceColor {
+    fn value(&self, p: Vec3) -> Color;
+}
+
+pub trait Surface {
+    fn scatter(&self, ray_in: Ray, rec: &SurfaceHit) -> Option<SurfaceInteraction>;
+}
+```
+
+The `SolidColor` texture contains just a solid color, and return it whatever the parameter is. Note the `Solid` means this is a solid texture, or 3D texture since it's defined for the whole 3D space.
+
+```Rust
+#[derive(Debug, Clone, PartialEq)]
+pub struct SolidColor {
+    pub albedo: Color,
+}
+
+impl SurfaceColor for SolidColor {
+    fn value(&self, _p: Vec3) -> Color {
+        self.albedo
+    }
+}
+```
+
+The `Diffuse` material simply contains one `Texture` defining the surface color, and it's used as the `attenuation` without further process. Two random function is used to generate vectors on unit sphere and hemisphere could be added to the `Vec3` type using our `Vec3Ext` trait easily:
+
+```Rust
+impl Vec3Ext for Vec3 {
+    // ...
+
+    fn random_on_sphere() -> Vec3 {
+        loop {
+            let v = rand::random::<Vec3>() * 2.0 + 1.0; // <1>
+            if v.length_squared() <= 1.0 {
+                return v.normalize();
+            }
+        }
+    }
+
+    fn random_on_hemisphere(axis: Vec3) -> Vec3 {
+        let v = Vec3::random_on_sphere();
+        let dot = axis.dot(v);
+        if dot >= 0.0 {
+            v
+        } else {
+            v - axis.mul(2.0 * dot)
+        }
+    }
+}
+```
+1. To use the `rand::random` directly on `Vec3`, we need to enable the `rand` feature for `glam`. And this will generate vectors uniformly distributed within $[0, 1]^3$ so we have to transform it to $[-1, 1]^3$ first.
+
+And now the `Diffuse` material is trivial:
+
+```Rust
+#[derive(Debug, Clone)]
+pub struct Diffuse {
+    pub albedo: Texture,
+}
+
+impl Surface for Diffuse {
+    fn scatter(&self, _ray_in: Ray, hit: &SurfaceHit) -> Option<SurfaceInteraction> {
+        let scattered = Ray::new(hit.position, Vec3::random_on_hemisphere(hit.normal));
+        Some(SurfaceInteraction {
+            attenuation: self.albedo.value(hit.position),
+            scattered,
+        })
+    }
+}
+```
 
 ### Primitive
 
 We'll first define the intersection record:
 
-``` rust
+```Rust
 pub struct Intersection {
     pub ray_length: f32,
     pub point: Vec3,
@@ -377,6 +506,7 @@ pub struct SurfaceHit {
     pub is_front: bool,
     pub ray_length: f32,
     pub hit_position: Vec3,
+    pub material: Arc<Material>,
 }
 
 pub trait Shape {
@@ -386,7 +516,7 @@ pub trait Shape {
 }
 ```
 
-### Sphere & `enum_delegate`
+### Sphere & `enum_delegate` {#sec-sphere-enum_delegate}
 
 Thus the `Sphere` definition and implementation is trivial:
 
@@ -426,6 +556,7 @@ impl Shape for Sphere {
             is_front: ray.direction.dot(hit_position) < 0.0,
             ray_length: t,
             hit_position,
+            material: self.material.clone(),
         })
     }
 
@@ -483,6 +614,98 @@ While `enum_dispatch` is maturer, some IDEs - I mean IDEs from JetBrains - canno
 :::
 
 ### Scene
+
+The scene contains multiple primitives. We use an aggregate type to group them together. The `Aggregate` itself would also be a `Shape` implementation, but we have several different implementations, so we also use an `enum` for it and `enum_delegate` its implementation to each concrete implementation. Currently, as stated previously, we only have one aggregate, that simply stores all primitives in a `Vec` and iterater on them.
+
+```Rust
+#[enum_delegate::implement(Shape)]
+#[derive(Debug, Clone)]
+pub enum Aggregate {
+    Vec(VecAggregate),
+}
+
+#[derive(Debug, Clone)]
+pub struct VecAggregate {
+    pub shapes: Vec<Arc<Primitive>>, // <1>
+    pub aabb: AABB,
+}
+
+impl VecAggregate {
+    pub fn new(shapes: Vec<Arc<Primitive>>) -> Self {
+        let aabb = shapes
+            .iter()
+            .map(|s| s.aabb())
+            .reduce(|a, b| a.union(b)) // <2>
+            .unwrap();
+        Self { shapes, aabb }
+    }
+
+    pub fn from_shapes(shapes: Vec<Primitive>) -> Self {
+        Self::new(shapes.into_iter().map(Arc::new).collect())
+    }
+}
+
+impl Shape for VecAggregate {
+    fn hit(&self, ray: Ray, rt_max: f32) -> Option<SurfaceHit> {
+        self.shapes // <3>
+            .iter()
+            .filter_map(|s| s.hit(ray, rt_max))
+            .min_by(|a, b| a.ray_length.total_cmp(&b.ray_length))
+    }
+
+    fn intersect(&self, ray: Ray, rt_max: f32) -> bool {
+        self.shapes.iter().any(|s| s.intersect(ray, rt_max)) // <4>
+    }
+
+    // ...
+}
+```
+1. We store `Arc<Primitive>` instead of `Primitive` so we can share the through different threads, and it costs very little memory to clone this struct.
+2. The bounding is simply the union of all bounding boxes of the primitives.
+3. We return the hit with the smallest ray length.
+4. If any primitive intersects the ray, then the whole aggregate intersects the ray.
+
+The usage of functional programming makes our codes more readable and compact. A scene type could then be:
+
+```Rust
+#[derive(Debug)]
+pub struct Scene {
+    pub film: Film,
+    pub camera: Camera,
+    pub aggregate: Aggregate,
+}
+```
+
+We reserve some sample/test scenes for test usage. Those scenes will be generated dynamically when we ask for them. A function is provided to generate them, accepting a parameter representing which scene we want. Later when we add some simple cli parameters and interfaces, parameters about those scenes could be passed in. We store those information in an `enum` type, called `TestScene`, and the test scene generating function is implemented on it.
+
+```Rust
+#[derive(Debug, Clone)]
+pub enum TestScene {
+    OneSphere,
+}
+
+impl TestScene {
+    pub fn build(&self) -> Scene {
+        match self {
+            TestScene::OneSphere => self.build_one_sphere(),
+        }
+    }
+
+    fn build_one_sphere(&self) -> Scene {
+        let film = Film::default((720, 480));
+        let camera = CameraBuilder::new().film(&film).build();
+
+        let aggregate: Aggregate =
+            VecAggregate::from_shapes(vec![Sphere::new(1.0, Default::default()).into()]).into();
+
+        Scene {
+            film,
+            camera,
+            aggregate,
+        }
+    }
+}
+```
 
 ### Camera
 
@@ -593,6 +816,135 @@ fn generate_start_point(&self, sample: Vec3) -> Vec3 {
     }
 }
 ```
+
+### The main method
+
+Now finally we're going to run our renderer with all components prepared! The `main` function is then:
+
+```Rust
+fn main() {
+    // Init the logger for outputs
+    env_logger::init();
+    // Parse cli parameters
+    // Check all parameters and init the renderer
+    let render_mode = RenderMode::default();
+    // Load the scene
+    let test_scene = TestScene::OneSphere;
+    let scene = test_scene.build();
+    // Start rendering
+    let rendered = scene.start_render(render_mode);
+    // Finish rendering and save the result
+    rendered.save("result.png").unwrap();
+    // Clean up
+}
+```
+
+The `Scene::start_render` just calls the `render` function. Note this will comsume the `Scene` and return the rendered scene. The `render` function is:
+
+```Rust
+pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
+    let Scene {
+        mut film,
+        camera,
+        aggregate,
+    } = scene;
+
+    log::trace!("Build Context.");
+    let ctx = RenderingContext {
+        camera: camera.clone(),
+        aggregate: aggregate.clone(),
+    };
+
+    let handle = thread::spawn({
+        let ctx = ctx.clone();
+        move || {
+            match (render_mode.parallel, render_mode.tiled) {
+                (false, None) => film
+                    .indexed_iter_mut()
+                    .for_each(|p| render_pixel(ctx.clone(), p)),
+                (false, Some(tile_size)) => {
+                    film.tile_based(tile_size, |t| render_tile(ctx.clone(), t))
+                }
+                (true, None) => film
+                    .indexed_iter_mut()
+                    .par_bridge()
+                    .for_each(|p| render_pixel(ctx.clone(), p)),
+                (true, Some(tile_size)) => {
+                    film.tile_based_parallel(tile_size, |t| render_tile(ctx.clone(), t))
+                }
+            }
+
+            film
+        }
+    });
+
+    let film = handle.join().expect("Rendering Failed!");
+    log::trace!("Rendering Finished.");
+    Scene {
+        film,
+        camera,
+        aggregate,
+    }
+}
+```
+
+We start the real rendering process in a new thread, as introduced above, the rendering thread(s). In that thread, we check whether parallel rendering and tiled rendering is enabled, and then start corresponding iteration to render each pixel. As you've seen here, how we defined aggregate, materials and camera make it suitable for us to clone the rendering context and just pass them to the rendering threads. After spawning that thread, we wait for it to finish, and finally save the rendered result. Later we'll handle things like preview update and progress report here. And the actual rendering process are also easy:
+
+```Rust
+pub fn render_tile(ctx: RenderingContext, mut tile: FilmTileMut<'_>) {
+    tile.indexed_iter_mut()
+        .for_each(|p| render_pixel(ctx.clone(), p))
+}
+
+pub fn render_pixel(ctx: RenderingContext, ((i, j), pixel): ((usize, usize), &mut Color)) {
+    for sample_index in 0..ctx.camera.spp.get() {
+        log::trace!("Sample {sample_index} for pixel ({i}, {j}).");
+        log::trace!("Generate camera ray.");
+        let ray = ctx.camera.generate_ray((i, j), sample_index);
+        let rendered = render_ray(&ctx, ray, 0);
+        if let Some(rendered) = rendered {
+            log::trace!("Add contribution of sample {sample_index} for pixel ({i}, {j}).");
+            pixel.add_assign(rendered)
+        }
+    }
+
+    pixel.div_assign(ctx.camera.spp.get() as f32);
+}
+
+pub fn render_ray(ctx: &RenderingContext, ray: Ray, depth: usize) -> Option<Color> {
+    // exceeds the depth limit
+    if depth >= ctx.camera.max_depth {
+        return None;
+    }
+    // if the ray hits an object
+    if let Some(hit) = ctx.aggregate.hit(ray, 100.0) {
+        // light-surface interaction
+        if let Some(interaction) = hit.material.scatter(ray, &hit) {
+            // render the scattered ray
+            if let Some(scattered) = render_ray(ctx, interaction.scattered, depth + 1) {
+                // contribution of the entry ray from the scattered ray
+                return Some(interaction.attenuation * scattered);
+            }
+        }
+
+        return None;
+    }
+    // contribution of the entry ray from the environment
+    const TOP_COLOR: Color = Color::new(0.5, 0.7, 1.0);
+    const BOTTOM_COLOR: Color = Color::new(1.0, 1.0, 1.0);
+    let z = ray.direction.z * 0.5 + 0.5;
+    Some(TOP_COLOR * z + BOTTOM_COLOR * (1.0 - z)) // <1>
+}
+```
+1. Here a linear interpolation is used to blend the top and bottom color for a background color. This is also where light comes from in our renderer.
+
+They are simple implementation of our design. Note there're lots of log codes in my implemenation, but for the sake of simplicity, I'll just ignore them here. If you're writing your own, don't forget to add suitable logs.
+
+Now run your code, and if you correctly implemented them, you would see something like:
+
+![Rendering Result](../images/p1c4/result.png)
+
+The scene is way too simple that even just rendering one by one is fast. In following chapters we'll add more complexity to it and you can then see the different among render modes.
 
 ## Questions, Challenges & Future Possibilities {#sec-p1c4-qcfp}
 
