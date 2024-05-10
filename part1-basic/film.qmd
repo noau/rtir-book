@@ -103,13 +103,13 @@ impl FilmExt for Film {
         F: Fn((usize, usize), FilmTileMut<'_>),
     {
         let w = self.shape()[1] / x;
-        self.exact_chunks_mut((x, y)) // <3>
+        self.exact_chunks_mut((x, y)) // <2>
             .into_iter()
             .enumerate()
             .for_each(|(index, tile)| f((index / w * x, index % w * y), tile));
     }
 
-    fn tile_based_parallel<F>(&mut self, (x, y): (usize, usize), f: F)
+    fn tile_based_parallel<F>(&mut self, (x, y): (usize, usize), f: F) // <3>
     where
         F: Fn((usize, usize), FilmTileMut<'_>) + Send + Sync,
     {
@@ -123,8 +123,8 @@ impl FilmExt for Film {
 }
 ```
 1. To treat the tiled and un-tiled version in the same way, we also add a `whole_tile` method which provides similiar interfce as the tiled version.
-2. If we follow the common naming convention in the `Rust` community, the name here should be `tile_based_parallel_mut`. However, this might be too long, and almost every time we call this method, we would modify the original array, so we can eliminate the `_mut` suffix as well as the immutable version here.
-3. Note that we're using `exact_chunks_mut` as stated above since we need the mutability. And we provided two similiar version of tiling, i.e., one uses `rayon` to calculate parallelly, and the other just executes one by one.
+2. Note that we're using `exact_chunks_mut` as stated above since we need the mutability. And we provided two similiar version of tiling, i.e., one uses `rayon` to calculate parallelly, and the other just executes one by one.
+3. If we follow the common naming convention in the `Rust` community, the name here should be `tile_based_parallel_mut`. However, this might be too long, and almost every time we call this method, we would modify the original array, so we can eliminate the `_mut` suffix as well as the immutable version here.
 
 Based on the test above, write another version for this and test the correctness of this parallel version. If you used some I/O or time-wasting code, you can add `#[ignore]` to the test and run it only when you want.
 
