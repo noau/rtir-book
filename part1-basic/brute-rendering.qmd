@@ -29,7 +29,7 @@ Absolutely the rendering phase is core of most renderer, so we'll break it down 
 ::: callout-important
 ## Figures
 
-There should be a lot figures explaining those rendering process. They'll be added later at the end of first draft.
+There should be a lot figures explaining those rendering process and used formulas. They'll be added later at the end of first draft.
 :::
 
 ### Pixel Rendering
@@ -52,7 +52,7 @@ When a ray hit an object, we'll calculate some related properties related to thi
 
 Then we'll calculate the interaction of the light and the surface at this point. When the light hits the surface, possibly some energy of the light will be absorbed. Left energy would spread further. Most of time those energy will be scatter into other rays, so we'll do the same **Ray Rendering** process for them, recursively. Some materials allows transmission. Under that scenario, some part of energy will become transmission ray, and we also apply **Ray Rendering** process to it. After calculating all those generated rays, we'll add all contributions of them together, and get the final result of this ray. Now the light source comes. Currently in this simple ray tracer, we assume that one material could either emit light, or scatter light, without mixed capabilities to both emit and scatter light. So a ray will have no energy carried unless it encounters a light source, so we can say that a light source is where we can directly obtain the color of the ray without the need to scatter it, and that's why our renderer is not physically plausible now.
 
-Some trivial light like emitting material will be implemented later in this part.
+Some trivial light like emitting material will be implemented later in this part later.
 
 ### Image Rendering
 
@@ -78,13 +78,13 @@ So the parameters needed are a film reference (for resolution), and a vertical F
 
 $$
 \begin{aligned}
-\mathbf o &= \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x - \frac{height}{2} \mathbf y = \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x - \mathbf y \\
+\mathbf o &= \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x + \frac{height}{2} \mathbf y = \mathbf p - d \mathbf z - \frac{width}{2} \mathbf x + \mathbf y \\
 \mathbf {dx} &= width \frac{\mathbf x}{film\_width} \\
 \mathbf {dy} &= - height \frac{\mathbf y}{film\_height} = - \frac{2 \mathbf y}{film\_height}
 \end{aligned}
 $$
 
-So when a user call the camera to generate a sample ray for pixel $(i, j)$ as the $k$th sample, it should first calculate the top left corner of that pixel by above formulas, and pass it with $\mathbf{dx}$, $\mathbf{dy}$ and $k$ to the `SamplePointGenerator` for a sample point. Then the sample point (used for caustics mentions above) with some other necessary information (if any) would be passed to `SampleStartGenerator` for a start point of the ray, and finally give out the ray defined by this two point.
+So when we call the camera to generate a sample ray for pixel $(i, j)$ as the $k$th sample, it should first calculate the top left corner of that pixel by above formulas, and pass it with $\mathbf{dx}$, $\mathbf{dy}$ and $k$ to the `generate_sample_point` method for a sample point. Then the sample point (used for caustics mentions above) with some other necessary information (if any) would be passed to `SampleStartGenerator` for a start point of the ray, and finally give out the ray defined by this two point.
 
 ### Geometry Object & Sphere
 
@@ -123,8 +123,7 @@ The material handles two things. First, it defines the color on the surface the 
 
 For the second part, we'll use a very simple model - uniform diffuse material, called `Lambertian` model. We assume that the surface of the object is perfectly rough, that when a beam of light hit on it, it distribute to all possible directions uniformally. The object will absorb some energy, so there'll be some energy loss. Since we're simulating a single light ray, we can think that it will be reflected to all possible directions with the same possibility. Thus, we just need to generate a random vector that from a uniform distribution on a half unit sphere, and the orient the sphere in the direction of the surface normal. Then we should trace along that new direction, and when we get the color of that reflected ray, we can then know the color of the entry light, by simply multiplying it with the energy loss. And the energy loss could be thought as the color of the object itself.
 
-There's a possibility that when there're multiple objects, this process will never stop or stop after a long time. As the energy decreases along with the reflection time, the contribution after several bouncing will be so small that we can just ignore it. So we can record the 'depth' of the ray. Whenever the ray bounce one time, the depth increases by 1. And whe the depth is larger than one limit we specify, we just stop and claim that this ray accepts no light, or it contribution is too small that is just ignored.
-This process is usually implemented in a recursive way, so the depth is just the depth of the recursion.
+There's a possibility that when there're multiple objects, this process will never stop or stop after a long time. As the energy decreases along with the reflection time, the contribution after several bouncing will be so small that we can just ignore it. So we can record the 'depth' of the ray. Whenever the ray bounce one time, the depth increases by 1. And whe the depth is larger than one limit we specify, we just stop and claim that this ray accepts no light, or it contribution is too small that is just ignored. This process is usually implemented in a recursive way, so the depth is just the depth of the recursion.
 
 So we can now design them generally. The `Texture` describes the functionality to get the color of the object at a given point on the surface. The `uv` coordinate should be included, but we'll ignore them currently and return to this later. The `Material` describes how light interact with the surface. We ask the `Material` to give out the scattered light ray, and the attenuation coefficient, along with other useful information wrapped in another type, `Interaction`. For our simple `Lambertian` material, the `attenuation` is just the surface color.
 
@@ -142,7 +141,7 @@ When calculating the intersection between a ray and the scene, we just iterate t
 
 After all the necessary compoenents, we can now finally design the main process of our renderer and have a runnable ray tracer! Here's the description of the main process:
 
-```bash
+``` bash
 Parse cli parameters
 Check all parameters and init the renderer
 Load the scene
@@ -153,7 +152,7 @@ Clean up
 
 For the `rendering` part, the code would look like this:
 
-```bash
+``` bash
 for every pixel
     for every sample
         generate a ray for this sample
@@ -163,7 +162,7 @@ for every pixel
 
 When rendering a ray, the process is:
 
-```bash
+``` bash
 if the ray exceeds the depth limit
     ignore this sample
 if the ray hits an object
@@ -184,86 +183,46 @@ Generally, there are two types of rendering threads in our renderer. One is the 
 
 ### Ray
 
-The ray type is trivial to implement. One thing to be noted is that we hope the direction of a ray should always be unit vector. We'll achieve this by a small trick: wrapper pattern as smart pointer. This trick is used on `Vector` instead of `Ray`, as following:
+The ray type is trivial to implement. One thing to be noted is that we hope the direction of a ray should always be unit vector. So the `Ray` could be like this:
 
 ``` rust
-#[derive(Debug, Copy, Clone)]// <1>
-pub struct UnitVector3(Vec3); 
-
-impl UnitVector3 {
-    pub fn new(v: Vec3) -> Self {
-        Self(v.normalize())
-    }
-}
-
-impl Deref for UnitVector3 { // <2>
-    type Target = Vec3;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for UnitVector3 { // <3>
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-```
-
-1.  Extra traits like `From<Vec3>` and `Default` are omitted.
-2.  What actually used in my code is to implement those two trait automatically using `derive_more` crate, with `#[derive(Deref, DerefMut)]`. This one here is only for demostration.
-3.  `DerefMut` requires `Deref` to be implemented, and use the same `Target` type as `Deref`.
-
-::: callout-note
-## Why not auto implement operator traits?
-
-This is because we cannot determine the result type for the operator traits. When you do calculations between `UnitVector`s and normal `Vec3`s, or `f32` values, you can not know whether the result is `UnitVector` or `Vec3`. Though you can always set the result type to `Vec3`, this isn't what the compiler should promise - it's too strong that not everyone wants it.
-:::
-
-And we can test its correctness:
-
-``` rust
-#[test]
-fn test_unit_vector() {
-    let v = Vec3::new(2.0, 0.0, 0.0);
-    let unit_v = UnitVector3::new(v);
-    assert_eq!(unit_v.x, 1.0);
-    assert_eq!(unit_v.y, 0.0);
-    assert_eq!(unit_v.z, 0.0);
-    assert_eq!(unit_v.length(), 1.0);
-}
-```
-
-So the `Ray` could be like this:
-
-``` rust
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Ray {
     pub origin: Vec3,
-    pub direction: UnitVector3,
+    pub direction: Vec3,
 }
 
 impl Ray {
-    pub fn new(origin: Vec3, direction: UnitVector3) -> Self {
-        Self { origin, direction }
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
+        Self {
+            origin,
+            direction: direction.normalize(),
+        }
+    }
+
+    pub fn from_start_end(start: Vec3, end: Vec3) -> Self {
+        Self::new(start, end - start)
     }
 
     pub fn evaluate(&self, t: f32) -> Vec3 {
-        self.origin + self.direction.0 * t // <1>
+        self.origin + self.direction * t
     }
 }
 ```
 
-1.  Note that here we still need to use `self.direction.0` instead of `self.direction`. Although the method `mul` defined in `Mul` was brought into `UnitVector3`(throught `Deref` and `DerefMut`), the type `UnitVector3` it self cannot be used in operator since `Mul` is not implemented for it.
+Write a test that the direction is normalized.
 
-Write a test for it. This should be very easy to test.
+::: callout-tip
+## Floating point precision error
+
+If you encountered some precision error of floating point numbers, especially if you just use `assert_eq!` to test the equality of two floating point numbers. The correct way is to test whether the difference between this two number is less than a given small value $\epsilon$, usually $1e^{-4}$ or $1e^{-5}$ is enough. Instead of doing so manually, we can use the `assert_relative_eq!` macro from `approx` crate to simplify and have better panic message when it fails.
+:::
 
 ### Material & Diffuse Material
 
 Our `SurfaceColor` and `Surface` traits are simple, they're named so that `Material` and `Texture` could be used for the `enum` type representing the actual implementations. See @sec-sphere-enum_delegate.
 
-```Rust
+``` rust
 pub trait SurfaceColor {
     fn value(&self, p: Vec3) -> Color;
 }
@@ -275,7 +234,7 @@ pub trait Surface {
 
 The `SolidColor` texture contains just a solid color, and return it whatever the parameter is. Note the `Solid` means this is a solid texture, or 3D texture since it's defined for the whole 3D space.
 
-```Rust
+``` rust
 #[derive(Debug, Clone, PartialEq)]
 pub struct SolidColor {
     pub albedo: Color,
@@ -290,13 +249,13 @@ impl SurfaceColor for SolidColor {
 
 The `Diffuse` material simply contains one `Texture` defining the surface color, and it's used as the `attenuation` without further process. Two random function is used to generate vectors on unit sphere and hemisphere could be added to the `Vec3` type using our `Vec3Ext` trait easily:
 
-```Rust
+``` rust
 impl Vec3Ext for Vec3 {
     // ...
 
     fn random_on_sphere() -> Vec3 {
         loop {
-            let v = rand::random::<Vec3>() * 2.0 + 1.0; // <1>
+            let v = rand::random::<Vec3>() * 2.0 - 1.0; // <1>
             if v.length_squared() <= 1.0 {
                 return v.normalize();
             }
@@ -314,11 +273,12 @@ impl Vec3Ext for Vec3 {
     }
 }
 ```
-1. To use the `rand::random` directly on `Vec3`, we need to enable the `rand` feature for `glam`. And this will generate vectors uniformly distributed within $[0, 1]^3$ so we have to transform it to $[-1, 1]^3$ first.
+
+1.  To use the `rand::random` directly on `Vec3`, we need to enable the `rand` feature for `glam`. And this will generate vectors uniformly distributed within $[0, 1]^3$ so we have to transform it to $[-1, 1]^3$ first.
 
 And now the `Diffuse` material is trivial:
 
-```Rust
+``` rust
 #[derive(Debug, Clone)]
 pub struct Diffuse {
     pub albedo: Texture,
@@ -339,21 +299,16 @@ impl Surface for Diffuse {
 
 We'll first define the intersection record:
 
-```Rust
+``` rust
 pub struct Intersection {
     pub ray_length: f32,
     pub point: Vec3,
-    pub normal: UnitVector3,
+    pub normal: Vec3,
     pub is_front: bool,
 }
 
 impl Intersection {
-    pub fn new(
-        ray_length: f32,
-        point: Vec3,
-        outwards_normal: UnitVector3,
-        ray_direction: UnitVector3,
-    ) -> Self {
+    pub fn new(ray_length: f32, point: Vec3, outwards_normal: Vec3, ray_direction: Vec3) -> Self {
         let (normal, is_front) = Self::adjust_normal(outwards_normal, ray_direction);
 
         Self {
@@ -364,12 +319,9 @@ impl Intersection {
         }
     }
 
-    fn adjust_normal(
-        outwards_normal: UnitVector3,
-        ray_direction: UnitVector3,
-    ) -> (UnitVector3, bool) {
-        if ray_direction.dot(outwards_normal.0) > 0.0 {
-            (outwards_normal.neg().into(), false)
+    fn adjust_normal(outwards_normal: Vec3, ray_direction: Vec3) -> (Vec3, bool) {
+        if ray_direction.dot(outwards_normal) > 0.0 {
+            (-outwards_normal, false)
         } else {
             (outwards_normal, true)
         }
@@ -428,7 +380,7 @@ impl AABB {
 
 The only troublesome is to write tests for all of them, but it's worthy.
 
-Now we have to consider about the ray-AABB intersection test, which also follows the *PBRT*'s approach:
+Now we have to consider about the ray-AABB intersection test, which also follows *PBRT*'s approach:
 
 ``` rust
 pub const MACHINE_EPSILON: f32 = f32::EPSILON * 0.5; // <1>
@@ -501,6 +453,7 @@ Those're basically plain translation from the *PBRT*'s `C++` code. The original 
 Finally we can define the interface of geometry objects, as a trait, like so:
 
 ``` rust
+#[derive(Debug, Clone)]
 pub struct SurfaceHit {
     pub normal: UnitVector3,
     pub is_front: bool,
@@ -603,7 +556,8 @@ pub enum Primitive {
     Sphere(Sphere) // <1>
 }
 ```
-1. This looks weird - the token `Sphere` repeated twice! But don't worry. It's fine. They live in different name spaces. The first `Sphere` is an enum variant and the second one is the struct we define above. And this is not the benefincal of `enum_delegate`. It's just something that vanilla `Rust`'s `enum` accepts.
+
+1.  This looks weird - the token `Sphere` repeated twice! But don't worry. It's fine. They live in different name spaces. The first `Sphere` is an enum variant and the second one is the struct we define above. And this is not the benefincal of `enum_delegate`. It's just something that vanilla `Rust`'s `enum` accepts.
 
 Besides the relation we've stated above, `From` and `TryInto` traits between the `enum` and `struct`s are also auto-implemented.
 
@@ -617,7 +571,7 @@ While `enum_dispatch` is maturer, some IDEs - I mean IDEs from JetBrains - canno
 
 The scene contains multiple primitives. We use an aggregate type to group them together. The `Aggregate` itself would also be a `Shape` implementation, but we have several different implementations, so we also use an `enum` for it and `enum_delegate` its implementation to each concrete implementation. Currently, as stated previously, we only have one aggregate, that simply stores all primitives in a `Vec` and iterater on them.
 
-```Rust
+``` rust
 #[enum_delegate::implement(Shape)]
 #[derive(Debug, Clone)]
 pub enum Aggregate {
@@ -660,14 +614,15 @@ impl Shape for VecAggregate {
     // ...
 }
 ```
-1. We store `Arc<Primitive>` instead of `Primitive` so we can share the through different threads, and it costs very little memory to clone this struct.
-2. The bounding is simply the union of all bounding boxes of the primitives.
-3. We return the hit with the smallest ray length.
-4. If any primitive intersects the ray, then the whole aggregate intersects the ray.
+
+1.  We store `Arc<Primitive>` instead of `Primitive` so we can share the through different threads, and it costs very little memory to clone this struct.
+2.  The bounding is simply the union of all bounding boxes of the primitives.
+3.  We return the hit with the smallest ray length.
+4.  If any primitive intersects the ray, then the whole aggregate intersects the ray.
 
 The usage of functional programming makes our codes more readable and compact. A scene type could then be:
 
-```Rust
+``` rust
 #[derive(Debug)]
 pub struct Scene {
     pub film: Film,
@@ -678,7 +633,7 @@ pub struct Scene {
 
 We reserve some sample/test scenes for test usage. Those scenes will be generated dynamically when we ask for them. A function is provided to generate them, accepting a parameter representing which scene we want. Later when we add some simple cli parameters and interfaces, parameters about those scenes could be passed in. We store those information in an `enum` type, called `TestScene`, and the test scene generating function is implemented on it.
 
-```Rust
+``` rust
 #[derive(Debug, Clone)]
 pub enum TestScene {
     OneSphere,
@@ -693,10 +648,17 @@ impl TestScene {
 
     fn build_one_sphere(&self) -> Scene {
         let film = Film::default((720, 480));
-        let camera = CameraBuilder::new().film(&film).build();
+        let camera = Camera::builder()
+            .position(Vec3::new(2.5, 0.0, 0.0))
+            .film(&film)
+            .build();
 
-        let aggregate: Aggregate =
-            VecAggregate::from_shapes(vec![Sphere::new(1.0, Default::default()).into()]).into();
+        let aggregate: Aggregate = VecAggregate::from_shapes(vec![Sphere::new(
+            1.0,
+            Arc::new(Diffuse::new(SolidColor::new(Color::new(0.5, 0.5, 0.5)).into()).into()),
+        )
+        .into()])
+        .into();
 
         Scene {
             film,
@@ -704,6 +666,7 @@ impl TestScene {
             aggregate,
         }
     }
+
 }
 ```
 
@@ -716,6 +679,7 @@ Film will not be included in the camera. Actually, this camera is just a virtual
 pub struct Camera {
     pub position: Vec3,
     pub coordinate: Mat3,
+    pub max_depth: usize,
     pub spp: NonZeroUsize,
     spp_jitter: (usize, usize),
     o: Vec3,
@@ -734,50 +698,59 @@ We use $\mathbf o + i\mathbf{dx} + j \mathbf{dy}$ for the location of a pixel, b
 ``` rust
 #[allow(clippy::too_many_arguments)] // <1>
 pub fn new(
-    position: Vec3,
-    look_at: Vec3,
-    up: Vec3,
-    film: &Film, // <2>
-    v_fov: f32,
-    offset: Vec2,
-    spp: NonZeroUsize,
-    jittering: bool,
-    orthographic: bool,
-) -> Self {
-    // Construct camera space coordinate
-    let z = (position - look_at).normalize();
-    let x = up.cross(z).normalize();
-    let y = z.cross(x);
-    let coordinate = Mat3::from_cols(x, y, z);
+        position: Vec3,
+        look_at: Vec3,
+        up: Vec3,
+        film: &Film, // <2>
+        v_fov: f32,
+        offset: Vec2,
+        max_depth: usize,
+        spp: NonZeroUsize,
+        jittering: bool,
+        orthographic: bool,
+    ) -> Self {
+        // Construct camera space coordinate
+        let coordinate: Mat3 = Affine3A::look_at_rh(position, look_at, up.normalize()) // <3>
+            .matrix3
+            .transpose()
+            .into();
+        let x = coordinate.x_axis;
+        let y = coordinate.y_axis;
+        let z = coordinate.z_axis;
 
-    // Construct virtual film
-    let dist = 1.0 / (v_fov / 2.0).tan();
-    let width = 2.0 * film.shape()[0] as f32 / film.shape()[1] as f32;
+        // Construct virtual film
+        let dist = 1.0 / (v_fov * f32::PI() / 360.0).tan();
+        let width = 2.0 * film.shape()[0] as f32 / film.shape()[1] as f32;
 
-    let o = position - dist * z + (width / 2.0 * x) - y + offset.x * x + offset.y * y;
-    let d = (width * x / film.shape()[0] as f32, -2.0 * y / film.shape()[1] as f32);
+        let o = position - dist * z - width * x / 2.0 + y + offset.x * x + offset.y * y;
+        let d = (
+            width * x / film.shape()[0] as f32,
+            -2.0 * y / film.shape()[1] as f32,
+        );
 
-    // Break spp into x and y that x * y = spp and both x and y are as close as possible
-    let spp_jitter = find_closest_factors(spp.get());
-    let d_jitter = (d.0 / spp_jitter.0 as f32, d.1 / spp_jitter.1 as f32);
+        // Break spp into x and y that x * y = spp and both x and y are as close as possible
+        let spp_jitter = find_closest_factors(spp.get());
+        let d_jitter = (d.0 / spp_jitter.0 as f32, d.1 / spp_jitter.1 as f32);
 
-    Self {
-        position,
-        coordinate,
-        spp,
-        spp_jitter,
-        o,
-        d,
-        d_jitter,
-        jittering,
-        orthographic,
-        dist,
+        Self {
+            position,
+            coordinate,
+            max_depth,
+            spp,
+            spp_jitter,
+            o,
+            d,
+            d_jitter,
+            jittering,
+            orthographic,
+            dist,
+        }
     }
-}
 ```
 
 1.  This function contains 9 parameters - too many that clippy will complains about it, so we need to explicitly accept it for this function. Don't allow it globally, it's still a good lint message, those not good for this one.
 2.  The `Film` is used since we need to know about the resolution of the film, but it don't actually need to reference it it later or own it.
+3.  The way to construct the coordinate of the camera is stated above, we actually we don't actually need to write this by hand. As crate for graphics, `glam` has already implemented this for us. The name `look_at_rh` means it construct the coordinate using the same way we did, where the suffix `_rh` means right hand, so there's also `_lh` and `look_to` version. The `Affine3A` type is a affine transformation, which will be used later for object transformations.
 
 As warned by clippy, it contains too much parameters. Create a build for it and provide a default settings for camera. This should be easy and it's left as an exercise. Don't forget to provide a `builder()` function for `Camera` that create a default builder so we don't need to remember the name of the builder.
 
@@ -821,7 +794,7 @@ fn generate_start_point(&self, sample: Vec3) -> Vec3 {
 
 Now finally we're going to run our renderer with all components prepared! The `main` function is then:
 
-```Rust
+``` rust
 fn main() {
     // Init the logger for outputs
     env_logger::init();
@@ -841,7 +814,7 @@ fn main() {
 
 The `Scene::start_render` just calls the `render` function. Note this will comsume the `Scene` and return the rendered scene. The `render` function is:
 
-```Rust
+``` rust
 pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
     let Scene {
         mut film,
@@ -890,7 +863,7 @@ pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
 
 We start the real rendering process in a new thread, as introduced above, the rendering thread(s). In that thread, we check whether parallel rendering and tiled rendering is enabled, and then start corresponding iteration to render each pixel. As you've seen here, how we defined aggregate, materials and camera make it suitable for us to clone the rendering context and just pass them to the rendering threads. After spawning that thread, we wait for it to finish, and finally save the rendered result. Later we'll handle things like preview update and progress report here. And the actual rendering process are also easy:
 
-```Rust
+``` rust
 pub fn render_tile(ctx: RenderingContext, mut tile: FilmTileMut<'_>) {
     tile.indexed_iter_mut()
         .for_each(|p| render_pixel(ctx.clone(), p))
@@ -936,17 +909,22 @@ pub fn render_ray(ctx: &RenderingContext, ray: Ray, depth: usize) -> Option<Colo
     Some(TOP_COLOR * z + BOTTOM_COLOR * (1.0 - z)) // <1>
 }
 ```
-1. Here a linear interpolation is used to blend the top and bottom color for a background color. This is also where light comes from in our renderer.
+
+1.  Here a linear interpolation is used to blend the top and bottom color for a background color. This is also where light comes from in our renderer.
 
 They are simple implementation of our design. Note there're lots of log codes in my implemenation, but for the sake of simplicity, I'll just ignore them here. If you're writing your own, don't forget to add suitable logs.
 
 Now run your code, and if you correctly implemented them, you would see something like:
 
-![Rendering Result](../images/p1c4/result.png)
+![Rendering Result](../images/p1c4/result.png){fig-align="center"}
 
 The scene is way too simple that even just rendering one by one is fast. In following chapters we'll add more complexity to it and you can then see the different among render modes.
 
 ## Questions, Challenges & Future Possibilities {#sec-p1c4-qcfp}
+
+### Manually construct the camera coordinate {#sec-p1c4-qcfp-man-cam-coord}
+
+Try to manually calculate the camera coordinate and compare yours with `glam`'s.
 
 ### Wrapper Pattern for `Film` Implementation {#sec-p1c4-qcfp-wrapper-film}
 
