@@ -22,8 +22,8 @@ Add a figure here to show how the film could be tiled.
 
 We'll leave the implmentation to others, and use the `ndarray` crate for this film struct. There're mainly two way to create a new type based on another type:
 
--   Wrapper Pattern
--   Type Alias
+- Wrapper Pattern
+- Type Alias
 
 The one I choose here is type alias. In this way, we can use methods provided by the `ndarray` crate naturally without the ugly `.0` infix, or spend much time on delegating methods to the inner type. However, there're also a lot problems with this approach. First the type inference rule won't use this alias for the type. Second, it's a problem that people can pass a wrong instance with the same type to our methods - we lost a great benefit of type-driven design! See [Exercise @sec-p1c3-qcfp-wrapper].
 

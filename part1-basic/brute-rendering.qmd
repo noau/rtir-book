@@ -90,9 +90,9 @@ So when we call the camera to generate a sample ray for pixel $(i, j)$ as the $k
 
 First, geometry objects should be able to do intersection test with a given ray. Information about the intersection should be returned and there's csould also be no intersection with that ray. If there is, necessary information that should be returned and remained for later rendering usage includes:
 
--   Surface normal and is front
--   Intersection point and the parameter along the ray
--   Reference to material of the object
+- Surface normal and is front
+- Intersection point and the parameter along the ray
+- Reference to material of the object
 
 Those are the very basic information. Later we'll add more like the uv coordinate of the intersection point on the geometry. The surface normal should point opposite from the ray, i.e., when the ray hit the geometry from outside, the surface should points outwards, and vice versa. The `is front` just indicates if the ray hit the geometry from outside or not. This could be handled by the constructor of the intersection type, with the ray direction, or by the outer caller that constructs the record directly. If given an normal points outwards, and a ray direction, we can just invert the direction of the normal if the dot product between outward normal and the ray direction is positive, and thus the normal points inward. Otherwise we now the normal should remain outwards.
 
