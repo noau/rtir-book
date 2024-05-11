@@ -1,0 +1,121 @@
+# Object Transformations {#sec-object-transform}
+
+Previously we can only have one sphere at the origin since even though there're multiple ones, we can only see one of them. In this chapter, we'll add the functionality to transform objects in the scene and objects can be not only moved around, but also rotated and scaled.
+
+## Affine Transformation
+
+Just read [PBRT 3.9 Transformations](https://pbr-book.org/4ed/Geometry_and_Transformations/Transformations.html) and [PBRT 3.10 Applying Transformations](https://pbr-book.org/4ed/Geometry_and_Transformations/Applying_Transformations.html). Note in the book the matrix is called 'homogeneous' matrix, while I just call it affine transform matrix.
+
+## Implementation Design
+
+We use an alternative `Shape` implementation for primitives with transformation. This is just called `Transformation`, and it's also a `Primitive`. A reference to the original primitive will be stored and used to implement the methods required by `Shape`, or more precisely, as wrappers of the inner primitive's implementation.
+
+By references, we can avoid copying the original primitive (as well as materials which is also stored by reference), and this could save lots memories when we have more large objects in the scene, like complicated meshes. This trick is call instancing.
+
+## Implementation
+
+The affine transform matrix is widely used in graphics, and `glam` has already implemented it. Generally it's just a $4 \times 4$ matrix, but we'll use `glam`'s `Affine3A` type instead of `Mat4`, since it's optimized for such tasks.
+
+``` rust
+#[derive(Debug, Clone, Copy)]
+pub struct Transformation {
+    pub transformation: Affine3A,
+    pub inversion: Affine3A,
+}
+```
+
+Transformation functions are implemented the same way as in *PBRT*. As in *PBRT*, we store both the transformation and the inverse of the transformation so that there's no need for recalculating.
+
+So the transformed primitive is just a wrapper of the original primitive, along with a transformation and transformed bounding box.
+
+``` rust
+#[derive(Debug, Clone)]
+pub struct Transform {
+    pub primitive: Arc<Primitive>,
+    pub aabb: AABB,
+    pub transformation: Transformation,
+}
+```
+
+The implementation of `Shape` for this transformed primitive is wrapper around the inner type's implementation. We first transform the ray using inverse transformation, i.e., transform into the local space of the primitive. Then we call the inner type's implementation, and transform the returned result back to the world space. For `intersection`, this is enough, but for hit, we need to transform the result back to world space if presented:
+
+``` rust
+impl Shape for Transform {
+    fn hit(&self, ray: Ray, rt_max: f32) -> Option<SurfaceHit> {
+        let (tray, trt_max) = self.transformation.transform_ray_limit_inv(ray, rt_max);
+        let hit = self.primitive.hit(tray, trt_max);
+        hit.map(
+            |SurfaceHit {
+                 normal,
+                 is_front,
+                 ray_length: _,
+                 position,
+                 material,
+             }| {
+                let tp = self.transformation.transform_point(position);
+                let t = ray.offset(tp);
+                SurfaceHit {
+                    normal: self.transformation.transform_normal(normal),
+                    is_front,
+                    ray_length: t,
+                    position: ray.evaluate(t),
+                    material,
+                }
+            },
+        )
+    }
+
+    fn intersect(&self, ray: Ray, rt_max: f32) -> bool {
+        let (tray, trt_max) = self.transformation.transform_ray_limit_inv(ray, rt_max);
+        self.primitive.intersect(tray, trt_max)
+    }
+
+    // ...
+}
+```
+
+Since we're transforming from local space to world space, we use the normal transformation direction.
+
+For convenience, we implement a lot of methods like `translate` or `scale` for `Transform` and `Arc<Primitive>`. Note you cannot actually write `impl Arc<Primitive>` since it's recognized as a foreign type. The actual implementation is in the `impl Shape` where the `self` have type `&Arc<Primitive>`.
+
+Now we can construct a second test scene for this chapter(one modified from [Peter Shirley's Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)):
+
+``` rust
+fn build_two_sphere(&self, scene_config: SceneConfig) -> Scene {
+    let film = Film::default(scene_config.film_size.unwrap_or((720, 480)));
+    let mut camera_builder = Camera::builder()
+        .position(Vec3::new(1.8, 0.0, 0.7))
+        .look_at(Vec3::new(0.0, 0.0, 0.7))
+        .film(&film);
+
+    // Apply scene configs
+    // ...
+
+    let camera = camera_builder.build();
+
+    let mat1 = Arc::new(Diffuse::new(SolidColor::new(Color::new(0.5, 0.5, 0.5)).into()).into());
+    let mat2 = Arc::new(Diffuse::new(SolidColor::new(Color::new(0.5, 0.7, 0.7)).into()).into());
+    let aggregate: Aggregate = VecAggregate::from_shapes(vec![
+        Transform::new(
+            Arc::new(Sphere::new(1.0, mat1).into()),
+            Transformation::new(Affine3A::from_translation(Vec3::new(0.0, 0.0, 1.0))),
+        ).into(),
+        Transform::new(
+            Arc::new(Sphere::new(1.0, mat2).into()),
+            Transformation::new(Affine3A::from_scale(Vec3::splat(100.0))),
+        ).translate(Vec3::new(0.0, 0.0, -100.0)).into(),
+    ]).into();
+
+    Scene {
+        film,
+        camera,
+        aggregate,
+    }
+}
+```
+
+And here's my rendered result:
+
+![Two Sphere Scene](../images/p1c6/two_sphere.png){fig-align="center"}
+
+You may found that it runs very slow, especially under debug mode, but it's acceptable for us.

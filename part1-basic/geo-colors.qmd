@@ -62,13 +62,13 @@ There's also no real design here. I'm just introducing some structs and function
 
 Four pixel formats are provided by `image` crate:
 
--   `RGB`: three primary colors, red, green, and blue.
+- `RGB`: three primary colors, red, green, and blue.
 
--   `RGBA`: `RGB` plus an extra alpha channel.
+- `RGBA`: `RGB` plus an extra alpha channel.
 
--   `Luma`: pixel that represents only gray-scale(lightness). You can achieve similar effect by using same value for the three primary color in `RGB`.
+- `Luma`: pixel that represents only gray-scale(lightness). You can achieve similar effect by using same value for the three primary color in `RGB`.
 
--   `LumaA`: again, `Luma` with an extra alpha channel.
+- `LumaA`: again, `Luma` with an extra alpha channel.
 
 Those four pixel types are parameterized by a type specifying the format of each component, and the available choice includes: `f32`, `f64`, `i8 - i64`, `u8 - u64`, `isize`, `usize`.
 
