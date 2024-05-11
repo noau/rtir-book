@@ -300,22 +300,16 @@ impl Surface for Diffuse {
 We'll first define the intersection record:
 
 ``` rust
-pub struct Intersection {
-    pub ray_length: f32,
-    pub point: Vec3,
-    pub normal: Vec3,
-    pub is_front: bool,
-}
-
-impl Intersection {
-    pub fn new(ray_length: f32, point: Vec3, outwards_normal: Vec3, ray_direction: Vec3) -> Self {
+impl SurfaceHit {
+    pub fn new(ray_length: f32, position: Vec3, outwards_normal: Vec3, ray_direction: Vec3, material: Arc<Material>) -> Self {
         let (normal, is_front) = Self::adjust_normal(outwards_normal, ray_direction);
 
         Self {
             ray_length,
-            point,
+            position,
             normal,
             is_front,
+            material,
         }
     }
 
@@ -329,7 +323,7 @@ impl Intersection {
 }
 ```
 
-Write unit tests for the `Intersection::adjust_normal` method. Don't worry, `Rust` supports unit tests of private methods.
+Write unit tests for the `SurfaceHit::adjust_normal` method. Don't worry, `Rust` supports unit tests of private methods.
 
 Then we're going to define the axis aligned bounding box following [PBRT 3.7 Bounding Boxes](https://pbr-book.org/4ed/Geometry_and_Transformations/Bounding_Boxes.html):
 
@@ -453,15 +447,6 @@ Those're basically plain translation from the *PBRT*'s `C++` code. The original 
 Finally we can define the interface of geometry objects, as a trait, like so:
 
 ``` rust
-#[derive(Debug, Clone)]
-pub struct SurfaceHit {
-    pub normal: UnitVector3,
-    pub is_front: bool,
-    pub ray_length: f32,
-    pub hit_position: Vec3,
-    pub material: Arc<Material>,
-}
-
 pub trait Shape {
     fn hit(&self, ray: Ray) -> Option<SurfaceHit>;
     fn intersect(&self, ray: Ray, rt_max: f32) -> bool;
@@ -504,13 +489,13 @@ impl Shape for Sphere {
 
         let hit_position = ray.origin + *ray.direction * t;
 
-        Some(SurfaceHit {
-            normal: hit_position.into(),
-            is_front: ray.direction.dot(hit_position) < 0.0,
-            ray_length: t,
+        Some(SurfaceHit::new(
+            t,
             hit_position,
-            material: self.material.clone(),
-        })
+            hit_position.normalize(),
+            ray.direction,
+            self.material.clone(),
+        ))
     }
 
     fn intersect(&self, ray: Ray, rt_max: f32) -> bool {
