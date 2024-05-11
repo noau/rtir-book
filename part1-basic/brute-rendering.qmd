@@ -1,4 +1,4 @@
-# Brute Force Ray-Tracing
+# Brute Force Ray-Tracing {#sec-brute-rendering}
 
 This chapter looks a bit long, but in we'll discuss and implement the core pipeline of a brute force ray tracer, with the only geometry supported - sphere, without materials. However, this will form the very basic of our renderer, and all following chapters is to add more functionalities to it, without big changes in the core logic.
 
@@ -16,7 +16,7 @@ However, to start more simply, we just use a simple function instead. This funct
 
 ### Renderer Configuration
 
-There're two places where renderer configurations come from, one is the scene description file and the other one is cli parameters. However, at this starting stage, we have none of them. So by now all parameters will be specified in the scene construction function, all hard-coded.
+There're two places where renderer configurations come from, one is the scene description file and the other one is cli parameters(see @sec-p1c5-cli-param). However, at this starting stage, we have none of them. So by now all parameters will be specified in the scene construction function, all hard-coded.
 
 This phase is designed here so that we can override the parameters in scene description with cli parameters. It should also resolve all conflicting/impossible parameters to avoid rendering errors. Things like progress bar and previewer should also be set up here. Note that **not all** parameters would/should be configured here. For example, the log control will be taken into consideration at the very early stage, even before we're trying to parse cli parameters later when we start to add a usable interface.
 
@@ -631,7 +631,7 @@ pub struct Scene {
 }
 ```
 
-We reserve some sample/test scenes for test usage. Those scenes will be generated dynamically when we ask for them. A function is provided to generate them, accepting a parameter representing which scene we want. Later when we add some simple cli parameters and interfaces, parameters about those scenes could be passed in. We store those information in an `enum` type, called `TestScene`, and the test scene generating function is implemented on it.
+We reserve some sample/test scenes for test usage. Those scenes will be generated dynamically when we ask for them. A function is provided to generate them, accepting a parameter representing which scene we want. Later when we add some simple cli parameters and interfaces (see @sec-p1c5-cli-param), parameters about those scenes could be passed in. We store those information in an `enum` type, called `TestScene`, and the test scene generating function is implemented on it.
 
 ``` rust
 #[derive(Debug, Clone)]
@@ -750,7 +750,7 @@ pub fn new(
 
 1.  This function contains 9 parameters - too many that clippy will complains about it, so we need to explicitly accept it for this function. Don't allow it globally, it's still a good lint message, those not good for this one.
 2.  The `Film` is used since we need to know about the resolution of the film, but it don't actually need to reference it it later or own it.
-3.  The way to construct the coordinate of the camera is stated above, we actually we don't actually need to write this by hand. As crate for graphics, `glam` has already implemented this for us. The name `look_at_rh` means it construct the coordinate using the same way we did, where the suffix `_rh` means right hand, so there's also `_lh` and `look_to` version. The `Affine3A` type is a affine transformation, which will be used later for object transformations.
+3.  The way to construct the coordinate of the camera is stated above, we actually we don't actually need to write this by hand. As crate for graphics, `glam` has already implemented this for us. The name `look_at_rh` means it construct the coordinate using the same way we did, where the suffix `_rh` means right hand, so there's also `_lh` and `look_to` version. The `Affine3A` type is a affine transformation, which will be used later for object transformations in @sec-object-transform.
 
 As warned by clippy, it contains too much parameters. Create a build for it and provide a default settings for camera. This should be easy and it's left as an exercise. Don't forget to provide a `builder()` function for `Camera` that create a default builder so we don't need to remember the name of the builder.
 
@@ -812,7 +812,7 @@ fn main() {
 }
 ```
 
-The `Scene::start_render` just calls the `render` function. Note this will comsume the `Scene` and return the rendered scene. The `render` function is:
+The `Scene::start_render` just calls the `render` function. Note this will consume the `Scene` and return the rendered scene. The `render` function is:
 
 ``` rust
 pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
@@ -822,36 +822,69 @@ pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
         aggregate,
     } = scene;
 
-    log::trace!("Build Context.");
+    let (sender, receiver) = flume::unbounded::<RenderMessage>(); // <1>
     let ctx = RenderingContext {
         camera: camera.clone(),
         aggregate: aggregate.clone(),
+        reporter: sender,
     };
 
+    let x = film.raw_dim()[0];
+    let y = film.raw_dim()[1];
     let handle = thread::spawn({
         let ctx = ctx.clone();
         move || {
-            match (render_mode.parallel, render_mode.tiled) {
-                (false, None) => film
-                    .indexed_iter_mut()
-                    .for_each(|p| render_pixel(ctx.clone(), p)),
-                (false, Some(tile_size)) => {
-                    film.tile_based(tile_size, |t| render_tile(ctx.clone(), t))
-                }
-                (true, None) => film
-                    .indexed_iter_mut()
-                    .par_bridge()
-                    .for_each(|p| render_pixel(ctx.clone(), p)),
-                (true, Some(tile_size)) => {
-                    film.tile_based_parallel(tile_size, |t| render_tile(ctx.clone(), t))
+            match render_mode.tiled {
+                None => if render_mode.parallel {
+                    (0..x)
+                        .cartesian_product(0..y)
+                        .for_each(|index| render_pixel(ctx.clone(), index));
+                } else {
+                    (0..x)
+                        .cartesian_product(0..y)
+                        .par_bridge()
+                        .for_each(|index| render_pixel(ctx.clone(), index));
+                },
+                Some((w, h)) => {
+                    let tiles = generate_tiles(x, y, w, h);
+                    log::trace!("Tiles: {tiles:?}");
+
+                    if render_mode.parallel {
+                        tiles
+                            .into_iter()
+                            .for_each(|tile| render_tile(ctx.clone(), tile, (w, h)));
+                    } else {
+                        tiles
+                            .into_par_iter()
+                            .for_each(|tile| render_tile(ctx.clone(), tile, (w, h)));
+                    }
                 }
             }
-
-            film
+            while !ctx.reporter.is_empty() {} // Wait until all pixels are written
         }
     });
 
-    let film = handle.join().expect("Rendering Failed!");
+    let mut count = 0;
+    let total = x * y;
+    while !handle.is_finished() {
+        if let Ok(message) = receiver.try_recv() { // <2>
+            match message {
+                RenderMessage::Pixel { position, color } => {
+                    film[position] = color;
+                    count += 1;
+                    if count % 1000 == 0 {
+                        log::debug!("Progress: {}%", count as f32 / total as f32 * 100.0) // <3>
+                    }
+                }
+                RenderMessage::Tile { .. } => {
+                    // TODO: Send Preview and update tile progress
+                }
+            }
+        }
+    }
+
+    handle.join().unwrap(); // <4>
+
     log::trace!("Rendering Finished.");
     Scene {
         film,
@@ -859,17 +892,43 @@ pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
         aggregate,
     }
 }
-```
 
-We start the real rendering process in a new thread, as introduced above, the rendering thread(s). In that thread, we check whether parallel rendering and tiled rendering is enabled, and then start corresponding iteration to render each pixel. As you've seen here, how we defined aggregate, materials and camera make it suitable for us to clone the rendering context and just pass them to the rendering threads. After spawning that thread, we wait for it to finish, and finally save the rendered result. Later we'll handle things like preview update and progress report here. And the actual rendering process are also easy:
+fn generate_tiles(x: usize, y: usize, m: usize, n: usize) -> Vec<(usize, usize)> {
+    let mut tiles = (0..x)
+        .step_by(m)
+        .cartesian_product((0..y).step_by(n))
+        .collect::<Vec<_>>();
+    let mut rng = thread_rng();
+    tiles.shuffle(&mut rng); // Shuffle the tiles for a better preview
+    tiles
+}
+```
+1. I'm using the channel provided by `flume` instead the one in `std`. This one is usually faster and is not poisoned.
+2. Here we just receive the message from the channel and update the film. Note that we use the `try_recv` method to avoid blocking the thread.
+3. Later in @sec-p1c5-progress-bar we'll add a better progress bar here.
+4. This `join` is actually useless, since we're checking whether the `working` thread is finished above and exits the loop only when it's finished.
+
+We start the real rendering thread above. In that thread, we check whether parallel rendering and tiled rendering is enabled, and then start corresponding iteration to render each pixel. As you've seen here, how we defined aggregate, materials and camera make it suitable for us to clone the rendering context and just pass them to the rendering threads. After spawning that thread, we wait for it to finish, and finally save the rendered result. Later we'll handle things like preview update and progress report(see @sec-p1c5-progress-bar) here. And the actual rendering process are also easy:
 
 ``` rust
-pub fn render_tile(ctx: RenderingContext, mut tile: FilmTileMut<'_>) {
-    tile.indexed_iter_mut()
-        .for_each(|p| render_pixel(ctx.clone(), p))
+pub fn render_tile(ctx: RenderingContext, (m, n): (usize, usize), (w, h): (usize, usize)) {
+    log::trace!("Render tile: ({m}, {n}).");
+    for i in m..(m + w) {
+        for j in n..(n + h) {
+            render_pixel(ctx.clone(), (i, j));
+        }
+    }
+    log::trace!("Report tile: ({m}, {n}).");
+    let _ = ctx.reporter
+        .send(RenderMessage::Tile {
+            position: (m, n),
+            size: (w, h),
+        });
 }
 
-pub fn render_pixel(ctx: RenderingContext, ((i, j), pixel): ((usize, usize), &mut Color)) {
+pub fn render_pixel(ctx: RenderingContext, (i, j): (usize, usize)) {
+    let mut color = Color::default();
+
     for sample_index in 0..ctx.camera.spp.get() {
         log::trace!("Sample {sample_index} for pixel ({i}, {j}).");
         log::trace!("Generate camera ray.");
@@ -877,16 +936,23 @@ pub fn render_pixel(ctx: RenderingContext, ((i, j), pixel): ((usize, usize), &mu
         let rendered = render_ray(&ctx, ray, 0);
         if let Some(rendered) = rendered {
             log::trace!("Add contribution of sample {sample_index} for pixel ({i}, {j}).");
-            pixel.add_assign(rendered)
+            color.add_assign(rendered)
         }
     }
 
-    pixel.div_assign(ctx.camera.spp.get() as f32);
+    color.div_assign(ctx.camera.spp.get() as f32);
+    log::trace!("Report pixel: ({i}, {j}).");
+    let _ = ctx.reporter
+        .send(RenderMessage::Pixel {
+            position: (i, j),
+            color,
+        });
 }
 
 pub fn render_ray(ctx: &RenderingContext, ray: Ray, depth: usize) -> Option<Color> {
     // exceeds the depth limit
     if depth >= ctx.camera.max_depth {
+        log::trace!("Max depth exceeded.");
         return None;
     }
     // if the ray hits an object
@@ -896,20 +962,22 @@ pub fn render_ray(ctx: &RenderingContext, ray: Ray, depth: usize) -> Option<Colo
             // render the scattered ray
             if let Some(scattered) = render_ray(ctx, interaction.scattered, depth + 1) {
                 // contribution of the entry ray from the scattered ray
+                log::trace!("Scattered ray rendered.");
                 return Some(interaction.attenuation * scattered);
             }
         }
 
+        log::trace!("Scattered ray is ignored");
         return None;
     }
     // contribution of the entry ray from the environment
+    log::trace!("The ray hit no object.");
     const TOP_COLOR: Color = Color::new(0.5, 0.7, 1.0);
     const BOTTOM_COLOR: Color = Color::new(1.0, 1.0, 1.0);
     let z = ray.direction.z * 0.5 + 0.5;
     Some(TOP_COLOR * z + BOTTOM_COLOR * (1.0 - z)) // <1>
 }
 ```
-
 1.  Here a linear interpolation is used to blend the top and bottom color for a background color. This is also where light comes from in our renderer.
 
 They are simple implementation of our design. Note there're lots of log codes in my implemenation, but for the sake of simplicity, I'll just ignore them here. If you're writing your own, don't forget to add suitable logs.

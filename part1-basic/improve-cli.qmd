@@ -1,0 +1,49 @@
+# Improve Cli I {#sec-improve-cli-i}
+
+In this chapter, we'll temporarily move away from the rendering itself, and trying to improve our renderer in some way to make our developing experience better.
+
+::: callout-note
+## Language Specific Chapter
+
+This chapter is language specific, which means we spend most time discussing `Rust` and its ecosystem. If you're not using `Rust`, this chapter is still useful, but you need more efforts to achieve the same effects I've done since I use lots of 3rd parties.
+
+You can also skip but it's **not** recommended.
+:::
+
+## Improvements
+
+### Cli Parameters {#sec-p1c5-cli-param}
+
+As mentioned earlier in @sec-brute-rendering, we usually use cli parameter to change the behavior of our renderer. Let's first list all possible parameters:
+
+-   `spp`: This should be positive integer, or not presented to use the value defined for the scene.
+
+-   `max-ray-depth`: Also positive integer, or not presented to use the value defined for the scene.
+
+-   `tiling`: A flag enabling tiled rendering.
+
+-   `parallel`: A flag enable `rayon`.
+
+-   `fast`: A short-hand flag that enables both `parallel` and `tiling`
+
+-   `fast-preview`: A short-hand flag that enables `parallel` and `tiling`, and set `spp` to `4`, `max-ray-depth` to `4` to obtains a very fast preview rendering.
+
+-   `diable-jittering`: Flag that disable pixel jittering. This means jittering is enabled by default.
+
+-   `save`: Accepts a path that the rendered result will be save, or don't save if no path is given.
+
+-   `orthographic`: Flag that enable orthographic projection for the camera. Otherwise projective projection will be used.
+
+-   `preview`: Enable real-time preview with `tev` image viewer opened. See @sec-p1c5-real-time-preview.
+
+-   `test-scene`: Render the chosen test scene pre-defined in our code.
+
+-   `film-size`: The film size, which is also the output image size.
+
+All those are parameters for a command called `render`. So you use this cli just like hoe you use `git` - `<renderer-executable> render [parameters...]`. Later we'll add some other commands.
+
+I'm going to use `clap` for cli parameter parsing, since it's powerful and matured.
+
+### Progress Report {#sec-p1c5-progress-bar}
+
+### Real-time Preview {#sec-p1c5-real-time-preview}
