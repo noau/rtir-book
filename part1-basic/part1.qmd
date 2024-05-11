@@ -1,3 +1,3 @@
-# Part One: The Basics
+# Part One: The Basics {#sec-p1-basic}
 
 In this part, we will go through the basics of a ray tracer, building a variety of the one you could build following Shirley's books. But don't worry, we'll make it different in later parts and build it more like PBRT.
