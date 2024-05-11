@@ -150,4 +150,85 @@ Try to add more useful argument by your own!
 
 ### Progress Report {#sec-p1c5-progress-bar}
 
+Now we've already have a simple progress, but it works badly - the console quickly scrolls, and it's hard to see useful informations. It's not even a bar! We're going to use `indicatif` to add some nice progress bars.
+
+Fisrt, instead of directly initialize the logger, we create the context of `indicatif`'s multiple progress bar, and init logger with it. This would be passed through our applicaiton so that whenever a progress bar is needed, the same progress context is used to support correct multiple progress bars. We also set the deault log level to `info` if `RUST_LOG` environment variable is not set.
+
+```Rust
+int main() {
+    // Init the logger for outputs
+    let progress_bar = MultiProgress::new();
+
+    // recreate the logger
+    let log_env = env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info");
+    let logger = env_logger::builder().parse_env(log_env).build();
+    LogWrapper::new(progress_bar.clone(), logger)
+        .try_init()
+        .unwrap();
+    
+    // ...
+}
+```
+
+Then at the place where we update the `film`, we can also update this progress bar accordingly.
+
+```Rust
+pub fn render(scene: Scene, render_mode: RenderMode, progress_bar: MultiProgress) -> Scene {
+    // ...
+
+    let tile_progress = render_mode.tiled.map(|(w, h)| { // <1>
+        progress_bar.add(
+            ProgressBar::new(((x / w) * (y / h)) as u64).with_style(
+                ProgressStyle::default_bar()
+                    .tick_strings(&["#", "##-", "-"])
+                    .template(
+                        "[{elapsed}] Tiles [{wide_bar:.green/cyan}] {percent}% ({pos}/{len}) <eta:{eta}>",
+                    )
+                    .unwrap_or(ProgressStyle::default_bar()).progress_chars("##-"),
+            ),
+        )
+    });
+    let pixel_progress = progress_bar.add(
+        ProgressBar::new((x * y) as u64).with_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "[{elapsed}] Pixel [{wide_bar:.green/cyan}] {percent}% ({pos}/{len}) <eta:{eta}>",
+                )
+                .unwrap_or(ProgressStyle::default_bar())
+                .progress_chars("##-"),
+        ),
+    );
+
+    while !handle.is_finished() {
+        if let Ok(message) = receiver.try_recv() {
+            match message {
+                RenderMessage::Pixel { position, color } => {
+                    film[position] = color;
+                    pixel_progress.inc(1);
+                }
+                RenderMessage::Tile { .. } => {
+                    if let Some(tile_progress) = &tile_progress {
+                        tile_progress.inc(1);
+                    }
+                }
+            }
+        }
+    }
+
+    handle.join().unwrap();
+
+    let time_elapsed = pixel_progress.elapsed(); // <2>
+    pixel_progress.finish();
+    progress_bar.remove(&pixel_progress);
+    if let Some(tile_progress) = &tile_progress {
+        tile_progress.finish();
+        progress_bar.remove(tile_progress)
+    }
+
+    // ...
+}
+```
+1. The tiling is not always enabled so we need to wrap it in `Option`. Also, we hope that tile progress is showed over the pixel progress, so if it's used, we add it first.
+2. We save the elapsed time before the progress bar is removed, and later we can report it through logger with `indicatif::HumanDuration`.
+
 ### Real-time Preview {#sec-p1c5-real-time-preview}
