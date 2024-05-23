@@ -1,5 +1,11 @@
 # Brute Force Ray-Tracing {#sec-brute-rendering}
 
+::: callout-important
+## Incorrectness
+
+The saved image may looks weird since I'm not considering the color management now. This should be fixed in the first revision of Part 1 before continuing to write Part 2.
+:::
+
 This chapter looks a bit long, but in we'll discuss and implement the core pipeline of a brute force ray tracer, with the only geometry supported - sphere, without materials. However, this will form the very basic of our renderer, and all following chapters is to add more functionalities to it, without big changes in the core logic.
 
 ## Core Rendering Flow
@@ -90,9 +96,9 @@ So when we call the camera to generate a sample ray for pixel $(i, j)$ as the $k
 
 First, geometry objects should be able to do intersection test with a given ray. Information about the intersection should be returned and there's csould also be no intersection with that ray. If there is, necessary information that should be returned and remained for later rendering usage includes:
 
-- Surface normal and is front
-- Intersection point and the parameter along the ray
-- Reference to material of the object
+-   Surface normal and is front
+-   Intersection point and the parameter along the ray
+-   Reference to material of the object
 
 Those are the very basic information. Later we'll add more like the uv coordinate of the intersection point on the geometry. The surface normal should point opposite from the ray, i.e., when the ray hit the geometry from outside, the surface should points outwards, and vice versa. The `is front` just indicates if the ray hit the geometry from outside or not. This could be handled by the constructor of the intersection type, with the ray direction, or by the outer caller that constructs the record directly. If given an normal points outwards, and a ray direction, we can just invert the direction of the normal if the dot product between outward normal and the ray direction is positive, and thus the normal points inward. Otherwise we now the normal should remain outwards.
 
@@ -888,10 +894,11 @@ fn generate_tiles(x: usize, y: usize, m: usize, n: usize) -> Vec<(usize, usize)>
     tiles
 }
 ```
-1. I'm using the channel provided by `flume` instead the one in `std`. This one is usually faster and is not poisoned.
-2. Here we just receive the message from the channel and update the film. Note that we use the `try_recv` method to avoid blocking the thread.
-3. Later in @sec-p1c5-progress-bar we'll add a better progress bar here.
-4. This `join` is actually useless, since we're checking whether the `working` thread is finished above and exits the loop only when it's finished.
+
+1.  I'm using the channel provided by `flume` instead the one in `std`. This one is usually faster and is not poisoned.
+2.  Here we just receive the message from the channel and update the film. Note that we use the `try_recv` method to avoid blocking the thread.
+3.  Later in @sec-p1c5-progress-bar we'll add a better progress bar here.
+4.  This `join` is actually useless, since we're checking whether the `working` thread is finished above and exits the loop only when it's finished.
 
 We start the real rendering thread above. In that thread, we check whether parallel rendering and tiled rendering is enabled, and then start corresponding iteration to render each pixel. As you've seen here, how we defined aggregate, materials and camera make it suitable for us to clone the rendering context and just pass them to the rendering threads. After spawning that thread, we wait for it to finish, and finally save the rendered result. Later we'll handle things like preview update and progress report(see @sec-p1c5-progress-bar) here. And the actual rendering process are also easy:
 
@@ -963,6 +970,7 @@ pub fn render_ray(ctx: &RenderingContext, ray: Ray, depth: usize) -> Option<Colo
     Some(TOP_COLOR * z + BOTTOM_COLOR * (1.0 - z)) // <1>
 }
 ```
+
 1.  Here a linear interpolation is used to blend the top and bottom color for a background color. This is also where light comes from in our renderer.
 
 They are simple implementation of our design. Note there're lots of log codes in my implemenation, but for the sake of simplicity, I'll just ignore them here. If you're writing your own, don't forget to add suitable logs.

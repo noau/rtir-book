@@ -2,6 +2,12 @@
 
 Previously we can only have one sphere at the origin since even though there're multiple ones, we can only see one of them. In this chapter, we'll add the functionality to transform objects in the scene and objects can be not only moved around, but also rotated and scaled.
 
+::: callout-important
+## Incorrectness
+
+There're weird artifacts in the rendered image now. This may comes from incorrect transformation algorithm, but I won't fix them now.
+:::
+
 ## Affine Transformation
 
 Just read [PBRT 3.9 Transformations](https://pbr-book.org/4ed/Geometry_and_Transformations/Transformations.html) and [PBRT 3.10 Applying Transformations](https://pbr-book.org/4ed/Geometry_and_Transformations/Applying_Transformations.html). Note in the book the matrix is called 'homogeneous' matrix, while I just call it affine transform matrix.
