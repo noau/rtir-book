@@ -829,11 +829,11 @@ pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
                 None => if render_mode.parallel {
                     (0..x)
                         .cartesian_product(0..y)
+                        .par_bridge()
                         .for_each(|index| render_pixel(ctx.clone(), index));
                 } else {
                     (0..x)
                         .cartesian_product(0..y)
-                        .par_bridge()
                         .for_each(|index| render_pixel(ctx.clone(), index));
                 },
                 Some((w, h)) => {
@@ -842,11 +842,11 @@ pub fn render(scene: Scene, render_mode: RenderMode) -> Scene {
 
                     if render_mode.parallel {
                         tiles
-                            .into_iter()
+                            .into_par_iter()
                             .for_each(|tile| render_tile(ctx.clone(), tile, (w, h)));
                     } else {
                         tiles
-                            .into_par_iter()
+                            .into_iter()
                             .for_each(|tile| render_tile(ctx.clone(), tile, (w, h)));
                     }
                 }
