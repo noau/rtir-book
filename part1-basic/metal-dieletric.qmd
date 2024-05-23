@@ -1,0 +1,85 @@
+# Metal and Dieletric Materials {#sec-p1c7-metal-dieletric}
+
+In this chapter, we'll quickly add two synthetic materials: metal and dielectric, so our scene could be more interesting and we can see the improvements of tiled rendering.
+
+## How Metal and Dieletric Materials Works
+
+We follows the way of [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html#metal). See it's chapter 10 and 11 for explanations.
+
+## Design
+
+They're two more material types, so we just add two material variants. They should implement all functions for material we've defined in @sec-brute-rendering. This work is actually very trivial to implement, since we'll use almost the same algorithm described in the above reference materials.
+
+## Imaplentation
+
+We first add a new `Metal` variant to `Material`, with a new implementation struct. Same as `Diffuse`, the `albedo` is again a `Texture`, and the `fuzz` component is just a `f32` value:
+
+``` rust
+#[derive(Debug, Clone, Default)]
+pub struct Metal {
+    pub albedo: Texture,
+    pub fuzz: f32,
+}
+```
+
+The scatter method is same as Shirley's one:
+
+``` rust
+impl Surface for Metal {
+    fn scatter(&self, ray_in: Ray, rec: &SurfaceHit) -> Option<SurfaceInteraction> {
+        let ref_dir =
+            ray_in.direction.reflect(rec.normal).normalize() + self.fuzz * Vec3::random_on_sphere();
+        let reflected = Ray::new(rec.position, ref_dir);
+        let attenuation = self.albedo.value(rec.position);
+
+        Some(SurfaceInteraction {
+            attenuation,
+            scattered: reflected,
+        })
+    }
+}
+```
+
+Note a new `reflect` method is added to `Vec3Ext`, for calculating a reflected ray. And the `Dielectric` is also almost same, so you can translate the `C++` code easily. Note in my code, I also added an `albedo` to the material, but you can remain to use just a white color.
+
+A modified version of the two spheres scene, called four spheres is similar to Shirley's. This looks like
+
+![Four Spheres](/images/p1c7\four_sphere_dielectric.png){fig-align="center"}
+
+For dielectric material, it's also similar. The core implementation is:
+
+``` rust
+impl Surface for Dielectric {
+    fn scatter(&self, ray_in: Ray, rec: &SurfaceHit) -> Option<SurfaceInteraction> {
+        let ri = if rec.is_front {
+            1.0 / self.ior
+        } else {
+            self.ior
+        };
+        let cos_theta = (-ray_in.direction.dot(rec.normal)).min(1.0);
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+
+        let refract = ri * sin_theta <= 1.0;
+        let dir = if !refract || Self::reflectance(cos_theta, ri) > rand::random() {
+            ray_in.direction.reflect(rec.normal)
+        } else {
+            ray_in.direction.refract(rec.normal, ri)
+        };
+
+        Some(SurfaceInteraction {
+            attenuation: Color::new(1.0, 1.0, 1.0),
+            scattered: Ray::new(rec.position, dir),
+        })
+    }
+}
+```
+
+This and used auxiliary methods are simple, and almost just translation of the `C++` code, so the whole code is not listed here. Change the left sphere to use the new `Dielectric` material, we can have a rendered result like:
+
+![Four Spheres, Dielectric](/images/p1c7\four_sphere_dielectric.png){fig-align="center"}
+
+And I also tested a high resolution version, which looks pretty well, right?
+
+![Four Spheres, Dielectric, resolution at 1440 \* 960](/images/p1c7\four_sphere_dielectric_highres.png){fig-align="center"}
+
+Using $180 \times 120$ as tile size, it costs me over 4 minutes, while the parallel version costs only less than 1 minute.

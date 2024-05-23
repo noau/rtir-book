@@ -29,6 +29,7 @@ book:
         - part1-basic/brute-rendering.qmd
         - part1-basic/improve-cli.qmd
         - part1-basic/transformations.qmd
+        - part1-basic/metal-dieletric.qmd
   appendices:
     - references.qmd
   page-footer:
@@ -63,3 +64,4 @@ format:
   bookup-html:
     toc: true
     toc-depth: 3
+    code-line-numbers: true
