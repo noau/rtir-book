@@ -30,6 +30,7 @@ book:
         - part1-basic/improve-cli.qmd
         - part1-basic/transformations.qmd
         - part1-basic/metal-dieletric.qmd
+        - part1-basic/simple-bvh.qmd
   appendices:
     - references.qmd
   page-footer:

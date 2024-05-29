@@ -76,10 +76,10 @@ impl Surface for Dielectric {
 
 This and used auxiliary methods are simple, and almost just translation of the `C++` code, so the whole code is not listed here. Change the left sphere to use the new `Dielectric` material, we can have a rendered result like:
 
-![Four Spheres, Dielectric](/images/p1c7\four_sphere_dielectric.png){fig-align="center"}
+![Four Spheres, Dielectric](../images/p1c7/four_sphere_dielectric.png){fig-align="center"}
 
 And I also tested a high resolution version, which looks pretty well, right?
 
-![Four Spheres, Dielectric, resolution at 1440 \* 960](/images/p1c7\four_sphere_dielectric_highres.png){fig-align="center"}
+![Four Spheres, Dielectric, resolution at 1440 \* 960](../images/p1c7/four_sphere_dielectric_highres.png){fig-align="center"}
 
 Using $180 \times 120$ as tile size, it costs me over 4 minutes, while the parallel version costs only less than 1 minute.
