@@ -1,0 +1,109 @@
+# Simple BVH {#sec-simple-bvh}
+
+When the scale of your scene becomes large, it will takes a lot of time to render. A large amount of time was used to calculate many useless and unnecessary ray-object intersection. This is where `BVH` comes in.
+
+## Theory
+
+You can read [Ray Tracing: The Next Week: Chapter 3 Bounding Volume Hierarchies](https://raytracing.github.io/books/RayTracingTheNextWeek.html#boundingvolumehierarchies) for what we're going to implement. You can also use [PBRT4 7.3 Bounding Volume Hierarchies](https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies.html) as reference, tough it's a bit complex now. That's what we'll implement in next part.
+
+## Design
+
+There's two kinds of nodes in BVH, i.e., Leaf node and Branch node. To start easily, we just uses leaf nodes containing one geometry primitive. If you've read *PBRT*'s explaination, you'll also know that you can store the BVH in a linear way - an overhead we do not need currently, so we'll just use the tree version now.
+
+There're multiple BVH constructing algorithm. We'll choose a simple one, that is to split all geometries under one branch node by sorting them by the logest axis, and evenly split them into two branches with same geometry amount in each. I call this evenly split. They'll be the two branches nodes, and under each, build them recursively until there's only one geometry, which becomes a leaf node.
+
+At each branch node, the bounding box is calculated and stored for later intersection test. This is a simple union of it's children's bounding boxes.
+
+## Implementation
+
+We start by defining the node of BVH. Our simple BVH contains only two kinds of nodes: `Leaf` and `Branch`:
+
+```Rust
+#[derive(Debug, Clone)]
+pub enum BvhNode {
+    Leaf(Arc<Primitive>),
+    Branch(Arc<BvhNode>, Arc<BvhNode>, AABB),
+}
+```
+
+When you do ray-aggregate intersection tests, you are actually test with this `BvhNode`, or, the actual BVH. We could use a simple recursive algorithm to test do this: first test with the AABB bounding box. If the ray misses the bounding box, it can be concluded that the ray doesn't hit the objects at that branch. Otherwise, we do the test recursively with the two children nodes if it's a branch node, or just test with the primitive if it's a leaf. Here's my code for `hit` method:
+
+```Rust
+impl BvhNode {
+    fn hit(&self, ray: Ray, rt_max: f32) -> Option<SurfaceHit> {
+        if !self.aabb().ray_test(ray, rt_max) {
+            return None;
+        }
+        match self {
+            BvhNode::Leaf(primitive) => primitive.hit(ray, rt_max),
+            BvhNode::Branch(left, right, _) => {
+                let hl = left.hit(ray, rt_max);
+                let hr = right.hit(ray, hl.as_ref().map(|h| h.ray_length).unwrap_or(rt_max));
+                hr.or(hl)
+            }
+        }
+    }
+
+    // ...
+}
+```
+
+Others are similar and easy to implement. The actual `BvhAggregate` is a simple wrapper for this BVH node struct, with methods to construct it for a given scene with selected method for splitting geometries. Currently we have only one method: split evenly.
+
+```Rust
+impl BvhAggregate {
+    // ...
+
+    pub fn create(shapes: Vec<Arc<Primitive>>, bvh_type: BvhType) -> Self {
+        Self {
+            tree: Self::build_bvh(shapes, bvh_type),
+        }
+    }
+
+    fn build_bvh(shapes: Vec<Arc<Primitive>>, bvh_type: BvhType) -> BvhNode {
+        if shapes.len() == 1 {
+            return BvhNode::Leaf(shapes[0].clone());
+        }
+
+        let aabb = shapes
+            .iter()
+            .map(|s| s.aabb())
+            .reduce(|a, b| a.union(b))
+            .unwrap();
+
+        let max_dim = aabb.max_dimension();
+
+        let (left, right) = match bvh_type {
+            BvhType::Even => Self::split_evenly(shapes, max_dim),
+        };
+
+        BvhNode::Branch(
+            Arc::new(Self::build_bvh(left, bvh_type)),
+            Arc::new(Self::build_bvh(right, bvh_type)),
+            aabb,
+        )
+    }
+
+    fn split_evenly(
+        mut shapes: Vec<Arc<Primitive>>,
+        max_dim: usize,
+    ) -> (Vec<Arc<Primitive>>, Vec<Arc<Primitive>>) {
+        shapes.sort_by(|a, b| a.aabb().center()[max_dim].total_cmp(&b.aabb().center()[max_dim]));
+        let (left, right) = shapes.split_at(shapes.len() / 2);
+        (left.into(), right.into())
+    }
+}
+
+```
+
+Next we can build a scene containing much more geometries, or spheres cause we have it only now. The one I use contains 84 spheres with randomly chosen materials, though they're arranged in a simple way.
+
+![Multiple Sphere Scene](../images/p1c8/multi_sphere_bvh.png){fig-align="center"}
+
+This image costs about 39 seconds on my computer, while using the same setup, the `VecAggregate` version costs over two minutes, and all improvement comes from our simple BVH!
+
+## Questions, Challenges & Future Possibilities {#sec-p1c8-qcfp}
+
+### A more interesting scene {#sec-p1c4-qcfp-inter-multi-sphere}
+
+Shirley used a more interesting scene in his [Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html#wherenext?/afinalrender) book. Try to fork that scene.
