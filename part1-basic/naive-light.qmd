@@ -1,0 +1,105 @@
+# Naive Light {#sec-naive-light}
+
+In this chapter we're going to remove the background light from the code, and instead, we're going to add a emmisive part to materials, for implementing naive light source. This chapter is simply a trick, so no theory is needed.
+
+## Design
+
+Our design to this emissive material is trivial - we just add a `emissive` method to the definition of `Material`. What we're doing is split the light behaviour of out material into `emissive` part and `scatter` part, and the contribution is the sum of them. However, we'll make all materials we've presented before non-emmisive, i.e., emit no light, and add a new `Emmisive` material that only emits light, but don't scatter light. This is for simplicity, though you can still use the same material for both purposes.
+
+## Implementation
+
+First we just delete the environment light in the `render_ray` function:
+
+```Rust
+pub fn render_ray(
+    ctx: &RenderingContext,
+    ray: Ray,
+    depth: usize,
+    max_ray_length: f32,
+) -> Option<Color> {
+    // ...
+
+    // contribution of the entry ray from the environment
+    log::trace!("The ray hit no object.");
+    None
+}
+```
+
+Note this locaiton is where we later add a real environment light like environment mapping.
+
+Then simply add a new function `emit` to the `Surface` trait, with almost same signature to `scatter`:
+
+```Rust
+#[enum_delegate::register]
+pub trait Surface {
+    fn scatter(&self, ray_in: Ray, rec: &SurfaceHit) -> Option<SurfaceInteraction>;
+    fn emit(&self, ray_in: Ray, rec: &SurfaceHit) -> Color;
+}
+```
+
+For those non-emissive material, simply returna black light, i.e., they all implement `emit` like:
+
+```Rust
+impl Surface for Diffuse {
+    // ...
+
+    fn emit(&self, _ray_in: Ray, _rec: &SurfaceHit) -> Color {
+        Color::new(0.0, 0.0, 0.0)
+    }
+}
+```
+
+And for the `Emissive` material, the `scatter` method always returns `None`, and the `emit` method simply reads the color from texture and multiply it by a factor, called `light_strength`:
+
+```Rust
+impl Surface for Emissive {
+    fn scatter(&self, _ray_in: Ray, _rec: &SurfaceHit) -> Option<SurfaceInteraction> {
+        None
+    }
+
+    fn emit(&self, _ray_in: Ray, rec: &SurfaceHit) -> Color {
+        self.albedo.value(rec.position) * self.light_strength
+    }
+}
+```
+
+To apply the `emit` method, we should modify the `render_ray` function, and instead of just return `None` if there's no valid scattered light, we should always calculate the `emit` component, and add the `scatter` component to it if presented.
+
+```Rust
+pub fn render_ray(
+    ctx: &RenderingContext,
+    ray: Ray,
+    depth: usize,
+    max_ray_length: f32,
+) -> Option<Color> {
+    // if the ray hits an object
+    if let Some(hit) = ctx.aggregate.hit(ray, max_ray_length) {
+        // light-surface interaction
+        let mut light = hit.material.emit(ray, &hit);
+        if let Some(interaction) = hit.material.scatter(ray, &hit) {
+            // render the scattered ray
+            let max_scatter_length = max_ray_length - hit.ray_length;
+            if max_ray_length > 0.0 {
+                if let Some(scattered) =
+                    render_ray(ctx, interaction.scattered, depth + 1, max_scatter_length)
+                {
+                    // contribution of the entry ray from the scattered ray
+                    log::trace!("Scattered ray rendered.");
+                    light += interaction.attenuation * scattered;
+                }
+            }
+        }
+
+        return Some(light);
+    }
+
+    // ..
+}
+```
+
+Now replace some textures in the scene of last chapter, and you should be able to see the effect:
+
+![Naive Light Source](../images/p1c9/naive_light.png){fig-align="center"}
+
+Though fairly noisy, it's still a simple light source, right? And one major task of later chapters is trying to decrease that noise and make it more physically plausible.
+
