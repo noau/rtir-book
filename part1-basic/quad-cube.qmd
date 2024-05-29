@@ -1,0 +1,9 @@
+# Quads and Cubes {#sec-quad-cube}
+
+In this chapter we're going to add two new kinds of primitives - quadrilaterals and cubes. We'll also build a new scene with these primitives, i.e., the classic Cornel's Box.
+
+## Theories
+
+## Design
+
+## Implementation

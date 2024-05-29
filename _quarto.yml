@@ -32,6 +32,7 @@ book:
         - part1-basic/metal-dieletric.qmd
         - part1-basic/simple-bvh.qmd
         - part1-basic/naive-light.qmd
+        - part1-basic/quad-cube.qmd
   appendices:
     - references.qmd
   page-footer:
