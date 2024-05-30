@@ -33,6 +33,7 @@ book:
         - part1-basic/simple-bvh.qmd
         - part1-basic/naive-light.qmd
         - part1-basic/quad-cube.qmd
+        - part1-basic/simple-uv.qmd
   appendices:
     - references.qmd
   page-footer:
