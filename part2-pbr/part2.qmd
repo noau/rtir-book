@@ -1,0 +1,24 @@
+# Part Two: Physically Based Rendering
+
+In Part I, we implemented a simple ray tracer, which can already render some interesting scenes. However, that renderer is based on our intuition, instead of physical lows. In this part, we'll replace every part of the renderer with a physically based scheme, which gives us a more realistic experience.
+
+Generally, what we'll cover includes:
+
+-   `BxDFs`: instead of emperical formula, we'll use BxDFs to define more complex materials.
+-   `Path Tracing`: we're going to implement a rather complex path tracer, with key improvements like multi-importance sampling.
+-   `Spectrum Rendering`: instead of `RGB` color, we'll turn to a spectrum based way of light representation, and we'll also support more output formats, including high-bit images and `Open EXR`.
+-   `More Primitives`: we'll add `Cylinder`, `Disk`, and probably the most important `Triangle Mesh` primitive. With those, mainly `Triangle Mesh`, we can render many complex scenes with various objects.
+-   `Light`: instead of the naive light scheme we're using, we'll use a physically based light, which is able to simulate more complex light behaviour. Various lights like `Point Light`, `Area Light` and `Environment Light` will be implemented.
+-   `Complex BVH`: BVH construction algorithms will be improved to build more efficient BVH.
+-   `Texture Anti-Aliasing`: we'll add texture anti-aliasing to improve the quality of the textures.
+-   `Normal and Replacement Map`: we'll add normal and replacement map to support more complex scenes.
+-   `Volume Rendering`: we'll add volume rendering to support volumes like fog.
+-   `Scene Description File`: we'll define a scene description format to support more complex scenes, and that it's possible to render scenes modeled in modeling softwares.
+
+This is the core part of this tutorial. Please read it carefully and make sure you understand every part, especially those math and physics contents.
+
+::: callout-note
+## In-compatible Scenes
+
+There're so much to modify and I will point out them whenever needed. However, all test scenes we've been using will be deleted and re-constructed, since so much are changed and it's cumbersome to modify them step by step.
+:::

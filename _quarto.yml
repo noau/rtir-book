@@ -34,6 +34,9 @@ book:
         - part1-basic/naive-light.qmd
         - part1-basic/quad-cube.qmd
         - part1-basic/simple-uv.qmd
+    - part: part2-pbr/part2.qmd
+      chapters:
+        - part2-pbr/simple-bsdf.qmd
   appendices:
     - references.qmd
   page-footer:
