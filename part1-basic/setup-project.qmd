@@ -34,9 +34,9 @@ Generally speaking, the go-to choice of Rust editor is `Visual Studio Code` with
 Now finally we're going to create our project and select a bunch of 3-rd party dependencies. You can skip the explanation of crates comparison and selection, just initialize your project and read the next chapter. However, please remember that there's a section explaining such things so when you feel uncertain or have some questions about the dependencies, you can refer back here. Don't worry, @sec-p1c1-qcfp concerns only about the dependencies.
 
 ``` bash
-crago new ray-tracer --bin
+cargo new ray-tracer --bin
 cd ray-tracer
-cargo add glam image palatte log env_logger # This is the list of 3-rd party dependencies
+cargo add glam image palette log env_logger # This is the list of 3-rd party dependencies
 ```
 
 We specify `--bin` to create an executable project(more precisely, a binary crate). If you lost that, you can just add a `main.rs` file under the `src` folder in your project and add these three lines of code:
@@ -62,6 +62,6 @@ Hello, world!
 
 ### Image Handling: `image`
 
-### Color Management: `Palatte`
+### Color Management: `Palette`
 
 ## Questions, Challenges & Future Possibilities {#sec-p1c1-qcfp}
