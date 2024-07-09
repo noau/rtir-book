@@ -19,6 +19,8 @@ book:
   reader-mode: true
   sidebar:
     style: "docked"
+  google-analytics: "G-NW6TNGQ9X5"
+  cookie-consent: true
   chapters:
     - index.qmd
     - part: part1-basic/part1.qmd
@@ -34,6 +36,9 @@ book:
         - part1-basic/naive-light.qmd
         - part1-basic/quad-cube.qmd
         - part1-basic/simple-uv.qmd
+    - part: part2-pbr/part2.qmd
+      chapters:
+        - part2-pbr/simple-bsdf.qmd
   appendices:
     - references.qmd
   page-footer:
