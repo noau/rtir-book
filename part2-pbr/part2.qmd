@@ -15,7 +15,7 @@ Generally, what we'll cover includes:
 -   `Volume Rendering`: we'll add volume rendering to support volumes like fog.
 -   `Scene Description File`: we'll define a scene description format to support more complex scenes, and that it's possible to render scenes modeled in modeling softwares.
 
-This is the core part of this tutorial. Please read it carefully and make sure you understand every part, especially those math and physics contents.
+This is the core part of this tutorial. Please read it carefully and make sure you understand every part, especially those math and physics contents. Note that only the basic implementations of each part are included here. Our main goal is to build a framework that is capable of rendering complex scenes using PBR techniques, and those complex things like advanced integrator will be covered in the next part.
 
 ::: callout-note
 ## In-compatible Scenes

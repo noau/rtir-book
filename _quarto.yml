@@ -19,6 +19,8 @@ book:
   reader-mode: true
   sidebar:
     style: "docked"
+  google-analytics: "G-NW6TNGQ9X5"
+  cookie-consent: true
   chapters:
     - index.qmd
     - part: part1-basic/part1.qmd
